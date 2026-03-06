@@ -13,7 +13,7 @@ const REFRESH_TOKEN_KEY = 'refresh_token';
 
 export const authService = {
   login: async (payload: LoginPayload) => {
-    const response = await api.post<AuthResponse>('/auth/login/mobile', payload, false);
+    const response = await api.post<AuthResponse>('/auth/login/mobile', payload, false, true);
 
     await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, response.access_token);
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, response.refresh_token);
@@ -21,8 +21,7 @@ export const authService = {
   },
 
   register: async (payload: RegisterPayload) => {
-    const response = await api.post<AuthResponse>('/auth/register', payload, false);
-    return response;
+    await api.post<void>('/auth/register', payload, false, true);
   },
 
   forgotPassword: (payload: ForgotPasswordPayload) =>

@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUser } from '@/contexts/UserContext';
@@ -64,11 +65,7 @@ export default function LoginScreen() {
       router.replace('/(app)/');
     } catch (err) {
       if (err instanceof ApiError) {
-        setApiError(
-          err.status === 401
-            ? 'Email ou mot de passe incorrect'
-            : err.message,
-        );
+        setApiError(err.message);
       } else {
         console.error(err);
         setApiError('Une erreur est survenue. Veuillez réessayer.');
@@ -89,6 +86,13 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <Pressable style={styles.backHome} onPress={() => router.replace('/(app)/')}>
+            <Ionicons name="arrow-back" size={16} color={colors.primary} />
+            <AppText variant="label" style={{ color: colors.primary, marginLeft: Spacing.xs }}>
+              Accueil
+            </AppText>
+          </Pressable>
+
           <View style={styles.header}>
             <View style={[styles.logoMark, { backgroundColor: colors.primary }]}>
               <AppText
@@ -195,6 +199,13 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginBottom: Spacing.md,
     marginTop: -Spacing.xs,
+  },
+  backHome: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.md,
+    padding: Spacing.xs,
   },
   footer: {
     flexDirection: 'row',

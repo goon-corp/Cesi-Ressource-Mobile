@@ -33,6 +33,45 @@ function buildUrl(path: string, params?: QueryParams): string {
   return queryString ? `${API_URL}${path}?${queryString}` : `${API_URL}${path}`;
 }
 
+// ─── Result pattern ───────────────────────────────────────────────────────────
+
+interface ResultResponse<T = unknown> {
+  is_success: boolean;
+  error: string | null;
+  errors: string[];
+  data?: T;
+}
+
+/**
+ * Extracts `data` from a Result<T> response.
+ * Throws ApiError if is_success is false, using errors/error fields.
+ */
+function extractApiResult<T>(json: unknown): T {
+  const result = json as ResultResponse<T>;
+  if (!result.is_success) {
+    const message =
+      result.errors?.length
+        ? result.errors.join(', ')
+        : result.error ?? 'Une erreur est survenue';
+    throw new ApiError(422, message);
+  }
+  return result.data as T;
+}
+
+/**
+ * Extracts the best error message from a non-2xx response body.
+ * With extractResult=true, prefers Result pattern fields over generic `message`.
+ */
+function extractErrorMessage(payload: unknown, extractResult: boolean, status: number): string {
+  if (extractResult) {
+    const result = payload as Partial<ResultResponse>;
+    if (result?.errors?.length) return result.errors.join(', ');
+    if (result?.error) return result.error;
+  }
+  const p = payload as { message?: string; error?: string };
+  return p?.message ?? p?.error ?? `Erreur ${status}`;
+}
+
 // ─── Token management ─────────────────────────────────────────────────────────
 
 let isRefreshing = false;
@@ -96,6 +135,7 @@ async function request<T>(
   authenticated = true,
   params?: QueryParams,
   retryCount = 0,
+  extractResult = false,
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -118,14 +158,11 @@ async function request<T>(
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-
-
-
   if (response.status === 401 && authenticated && retryCount === 0) {
     try {
       const newToken = await refreshAccessToken();
       headers.Authorization = `Bearer ${newToken}`;
-      
+
       const retryResponse = await fetch(buildUrl(path, params), {
         method,
         headers,
@@ -136,34 +173,37 @@ async function request<T>(
         const payload = await retryResponse.json().catch(() => ({}));
         throw new ApiError(
           retryResponse.status,
-          (payload as { message?: string }).message ?? `Erreur ${retryResponse.status}`,
+          extractErrorMessage(payload, extractResult, retryResponse.status),
         );
       }
 
-      if (retryResponse.status === 204) {
-        return undefined as T;
-      }
+      if (retryResponse.status === 204) return undefined as T;
 
-      return retryResponse.json() as Promise<T>;
+      const retryText = await retryResponse.text();
+      if (!retryText) return undefined as T;
+      const retryJson = JSON.parse(retryText);
+      return extractResult ? extractApiResult<T>(retryJson) : (retryJson as T);
     } catch (error) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(401, 'Session expirée');
     }
   }
 
+
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     throw new ApiError(
       response.status,
-      (payload as { message?: string }).message ?? `Erreur ${response.status}`,
+      extractErrorMessage(payload, extractResult, response.status),
     );
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
+  if (response.status === 204) return undefined as T;
 
-  return response.json() as Promise<T>;
+  const text = await response.text();
+  if (!text) return undefined as T;
+  const json = JSON.parse(text);
+  return extractResult ? extractApiResult<T>(json) : (json as T);
 }
 
 // ─── Upload (multipart/form-data) ─────────────────────────────────────────────
@@ -173,6 +213,7 @@ async function upload<T>(
   path: string,
   formData: FormData,
   authenticated = true,
+  extractResult = false,
   retryCount = 0,
 ): Promise<T> {
   const headers: Record<string, string> = {
@@ -200,7 +241,7 @@ async function upload<T>(
     try {
       const newToken = await refreshAccessToken();
       headers.Authorization = `Bearer ${newToken}`;
-      
+
       const retryResponse = await fetch(`${API_URL}${path}`, {
         method,
         headers,
@@ -211,15 +252,16 @@ async function upload<T>(
         const payload = await retryResponse.json().catch(() => ({}));
         throw new ApiError(
           retryResponse.status,
-          (payload as { message?: string }).message ?? `Erreur ${retryResponse.status}`,
+          extractErrorMessage(payload, extractResult, retryResponse.status),
         );
       }
 
-      if (retryResponse.status === 204) {
-        return undefined as T;
-      }
+      if (retryResponse.status === 204) return undefined as T;
 
-      return retryResponse.json() as Promise<T>;
+      const retryText = await retryResponse.text();
+      if (!retryText) return undefined as T;
+      const retryJson = JSON.parse(retryText);
+      return extractResult ? extractApiResult<T>(retryJson) : (retryJson as T);
     } catch (error) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(401, 'Session expirée');
@@ -230,39 +272,41 @@ async function upload<T>(
     const payload = await response.json().catch(() => ({}));
     throw new ApiError(
       response.status,
-      (payload as { message?: string }).message ?? `Erreur ${response.status}`,
+      extractErrorMessage(payload, extractResult, response.status),
     );
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
+  if (response.status === 204) return undefined as T;
 
-  return response.json() as Promise<T>;
+  const text = await response.text();
+  if (!text) return undefined as T;
+  const json = JSON.parse(text);
+  return extractResult ? extractApiResult<T>(json) : (json as T);
 }
 
 // ─── Public client ────────────────────────────────────────────────────────────
 
 export const api = {
-  get: <T>(path: string, authenticated = true, params?: QueryParams) =>
-    request<T>('GET', path, undefined, authenticated, params),
+  get: <T>(path: string, authenticated = true, params?: QueryParams, extractResult = false) =>
+    request<T>('GET', path, undefined, authenticated, params, 0, extractResult),
 
-  post: <T>(path: string, body: unknown, authenticated = true) =>
-    request<T>('POST', path, body, authenticated),
+  post: <T>(path: string, body: unknown, authenticated = true, extractResult = false) =>
+    request<T>('POST', path, body, authenticated, undefined, 0, extractResult),
 
-  put: <T>(path: string, body: unknown, authenticated = true) =>
-    request<T>('PUT', path, body, authenticated),
+  put: <T>(path: string, body: unknown, authenticated = true, extractResult = false) =>
+    request<T>('PUT', path, body, authenticated, undefined, 0, extractResult),
 
-  patch: <T>(path: string, body: unknown, authenticated = true) =>
-    request<T>('PATCH', path, body, authenticated),
+  patch: <T>(path: string, body: unknown, authenticated = true, extractResult = false) =>
+    request<T>('PATCH', path, body, authenticated, undefined, 0, extractResult),
 
-  delete: <T>(path: string, authenticated = true) =>
-    request<T>('DELETE', path, undefined, authenticated),
+  delete: <T>(path: string, authenticated = true, extractResult = false) =>
+    request<T>('DELETE', path, undefined, authenticated, undefined, 0, extractResult),
 
   upload: <T>(
     method: 'POST' | 'PUT' | 'PATCH',
     path: string,
     formData: FormData,
     authenticated = true,
-  ) => upload<T>(method, path, formData, authenticated),
+    extractResult = false,
+  ) => upload<T>(method, path, formData, authenticated, extractResult),
 };

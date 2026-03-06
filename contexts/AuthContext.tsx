@@ -25,7 +25,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (payload: LoginPayload) => Promise<string | null>;
-  register: (payload: RegisterPayload) => Promise<string | null>;
+  register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
 }
@@ -79,14 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return extractedUserId;
   }, []);
 
-  const register = useCallback(async (payload: RegisterPayload): Promise<string | null> => {
-    const res = await authService.register(payload);
-    const extractedUserId = extractUserIdFromToken(res.access_token);
-    if (extractedUserId) {
-      await SecureStore.setItemAsync(USER_ID_KEY, extractedUserId);
-      setUserId(extractedUserId);
-    }
-    return extractedUserId;
+  const register = useCallback(async (payload: RegisterPayload): Promise<void> => {
+    await authService.register(payload);
   }, []);
 
   const logout = useCallback(async () => {

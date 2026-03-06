@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
-import { useUser } from '@/contexts/UserContext';
 import { Toast } from 'toastify-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { AppText } from '@/components/ui/AppText';
@@ -33,6 +32,80 @@ interface FieldErrors {
   last_name?: string;
 }
 
+// ─── Password rules ───────────────────────────────────────────────────────────
+const PASSWORD_RULES = [
+  { label: 'Entre 5 et 20 caractères', test: (p: string) => p.length >= 5 && p.length <= 20 },
+  { label: 'Au moins une majuscule', test: (p: string) => /[A-Z]/.test(p) },
+  { label: 'Au moins un chiffre', test: (p: string) => /[0-9]/.test(p) },
+  { label: 'Au moins un symbole', test: (p: string) => /[^a-zA-Z0-9]/.test(p) },
+];
+
+function isPasswordValid(p: string) {
+  return PASSWORD_RULES.every(({ test }) => test(p));
+}
+
+function PasswordRules({ password }: { password: string }) {
+  const { colors } = useTheme();
+  if (!password) return null;
+
+  return (
+    <View style={ruleStyles.container}>
+      {PASSWORD_RULES.map(({ label, test }) => {
+        const ok = test(password);
+        return (
+          <View key={label} style={ruleStyles.row}>
+            <Ionicons
+              name={ok ? 'checkmark-circle' : 'ellipse-outline'}
+              size={14}
+              color={ok ? colors.success : colors.textMuted}
+            />
+            <AppText
+              variant="caption"
+              style={{ marginLeft: 6, color: ok ? colors.success : colors.textMuted }}
+            >
+              {label}
+            </AppText>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const ruleStyles = StyleSheet.create({
+  container: {
+    marginTop: -Spacing.xs,
+    marginBottom: Spacing.md,
+    gap: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+});
+
+function ConfirmPasswordMatch({ password, confirm }: { password: string; confirm: string }) {
+  const { colors } = useTheme();
+  if (!confirm) return null;
+
+  const match = password === confirm;
+  return (
+    <View style={[ruleStyles.row, { marginTop: -Spacing.xs, marginBottom: Spacing.md }]}>
+      <Ionicons
+        name={match ? 'checkmark-circle' : 'close-circle'}
+        size={14}
+        color={match ? colors.success : colors.error}
+      />
+      <AppText
+        variant="caption"
+        style={{ marginLeft: 6, color: match ? colors.success : colors.error }}
+      >
+        {match ? 'Les mots de passe correspondent' : 'Les mots de passe ne correspondent pas'}
+      </AppText>
+    </View>
+  );
+}
+
 function validateStep1(
   email: string,
   password: string,
@@ -42,7 +115,7 @@ function validateStep1(
   if (!email) e.email = "L'adresse email est requise";
   else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Adresse email invalide';
   if (!password) e.password = 'Le mot de passe est requis';
-  else if (password.length < 8) e.password = 'Minimum 8 caractères';
+  else if (!isPasswordValid(password)) e.password = 'Le mot de passe ne respecte pas les règles';
   if (!confirm_password) e.confirm_password = 'La confirmation est requise';
   else if (password !== confirm_password) e.confirm_password = 'Les mots de passe ne correspondent pas';
   return e;
@@ -162,7 +235,6 @@ const stepStyles = StyleSheet.create({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function RegisterScreen() {
   const { register } = useAuth();
-  const { fetchUser } = useUser();
   const { colors } = useTheme();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -177,6 +249,11 @@ export default function RegisterScreen() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const isStep1Valid =
+    /\S+@\S+\.\S+/.test(form.email) &&
+    isPasswordValid(form.password) &&
+    form.confirm_password === form.password;
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -226,10 +303,9 @@ export default function RegisterScreen() {
     setApiError('');
     setLoading(true);
     try {
-      const userId = await register(form);
-      if (userId) await fetchUser(userId);
-      Toast.success('Compte créé avec succès !');
-      router.replace('/(app)/');
+      await register(form);
+      Toast.success('Un email de confirmation vous a été envoyé.');
+      router.replace('/(auth)/login');
     } catch (err) {
       if (err instanceof ApiError) {
         setApiError(err.status === 409 ? 'Cette adresse email est déjà utilisée' : err.message);
@@ -252,6 +328,13 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <Pressable style={styles.backHome} onPress={() => router.replace('/(app)/')}>
+            <Ionicons name="arrow-back" size={16} color={colors.primary} />
+            <AppText variant="label" style={{ color: colors.primary, marginLeft: Spacing.xs }}>
+              Accueil
+            </AppText>
+          </Pressable>
+
           {/* Logo */}
           <View style={styles.header}>
             <View style={[styles.logoMark, { backgroundColor: colors.primary }]}>
@@ -307,7 +390,7 @@ export default function RegisterScreen() {
                 />
                 <AppTextInput
                   label="Mot de passe"
-                  placeholder="8 caractères minimum"
+                  placeholder="5 à 20 caractères"
                   value={form.password}
                   onChangeText={(v) => update('password', v)}
                   secureTextEntry
@@ -315,6 +398,7 @@ export default function RegisterScreen() {
                   error={fieldErrors.password}
                   required
                 />
+                <PasswordRules password={form.password} />
                 <AppTextInput
                   label="Confirmer le mot de passe"
                   placeholder="Répétez votre mot de passe"
@@ -325,7 +409,8 @@ export default function RegisterScreen() {
                   error={fieldErrors.confirm_password}
                   required
                 />
-                <AppButton label="Suivant" onPress={goNext} />
+                <ConfirmPasswordMatch password={form.password} confirm={form.confirm_password} />
+                <AppButton label="Suivant" onPress={goNext} disabled={!isStep1Valid} />
               </>
             ) : (
               <>
@@ -431,6 +516,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: Spacing.sm,
     padding: Spacing.sm,
+  },
+  backHome: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.md,
+    padding: Spacing.xs,
   },
   footer: {
     flexDirection: 'row',
