@@ -12,6 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useUser } from '@/contexts/UserContext';
+import { Toast } from 'toastify-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { AppText } from '@/components/ui/AppText';
 import { AppTextInput } from '@/components/ui/AppTextInput';
@@ -160,6 +162,7 @@ const stepStyles = StyleSheet.create({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function RegisterScreen() {
   const { register } = useAuth();
+  const { fetchUser } = useUser();
   const { colors } = useTheme();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -223,7 +226,10 @@ export default function RegisterScreen() {
     setApiError('');
     setLoading(true);
     try {
-      await register(form);
+      const userId = await register(form);
+      if (userId) await fetchUser(userId);
+      Toast.success('Compte créé avec succès !');
+      router.replace('/(app)/');
     } catch (err) {
       if (err instanceof ApiError) {
         setApiError(err.status === 409 ? 'Cette adresse email est déjà utilisée' : err.message);

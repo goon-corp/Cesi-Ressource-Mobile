@@ -5,6 +5,8 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { UserProvider } from '@/contexts/UserContext';
+import ToastManager from 'toastify-react-native';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -47,7 +49,10 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RootNavigator />
+        <UserProvider>
+          <RootNavigator />
+          <ToastManager />
+        </UserProvider>
       </AuthProvider>
     </ThemeProvider>
   );

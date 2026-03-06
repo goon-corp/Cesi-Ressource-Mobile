@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
+import { useUser } from '@/contexts/UserContext';
+import { Toast } from 'toastify-react-native';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
 import { BorderRadius, Shadow, Spacing } from '@/constants/Spacing';
@@ -54,7 +56,8 @@ interface DrawerMenuProps {
 
 export function DrawerMenu({ isOpen, onClose }: DrawerMenuProps) {
   const { colors } = useTheme();
-  const { logout, user, isAuthenticated } = useAuth();
+  const { logout, isAuthenticated } = useAuth();
+  const { user } = useUser();
   const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
 
@@ -92,6 +95,7 @@ export function DrawerMenu({ isOpen, onClose }: DrawerMenuProps) {
   const handleLogout = async () => {
     onClose();
     await logout();
+    Toast.success('Vous avez été déconnecté.');
   };
 
   const handleLogin = () => {

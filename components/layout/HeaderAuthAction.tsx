@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
+import { useUser } from '@/contexts/UserContext';
 import { useTheme } from '@/hooks/useTheme';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
@@ -9,7 +10,8 @@ import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
 
 export function HeaderAuthAction() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
+  const { user } = useUser();
   const { colors } = useTheme();
 
   if (isAuthenticated && user) {

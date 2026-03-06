@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
 import { useTheme } from '@/hooks/useTheme';
 import { AppText } from '@/components/ui/AppText';
 import { AppTextInput } from '@/components/ui/AppTextInput';
@@ -18,6 +19,7 @@ import { AppAlert } from '@/components/ui/AppAlert';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { FontSize, FontWeight } from '@/constants/Typography';
 import { ApiError } from '@/services/api';
+import { Toast } from 'toastify-react-native';
 
 interface FieldErrors {
   email?: string;
@@ -34,6 +36,7 @@ function validate(email: string, password: string): FieldErrors {
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const { fetchUser } = useUser();
   const { colors } = useTheme();
 
   const [email, setEmail] = useState('');
@@ -55,7 +58,10 @@ export default function LoginScreen() {
     setApiError('');
     setLoading(true);
     try {
-      await login({ email, password });
+      const userId = await login({ email, password });
+      if (userId) await fetchUser(userId);
+      Toast.success('Vous êtes maintenant connecté.');
+      router.replace('/(app)/');
     } catch (err) {
       if (err instanceof ApiError) {
         setApiError(

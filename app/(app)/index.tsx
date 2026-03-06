@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -20,6 +21,8 @@ import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
 import { MOCK_RESOURCES } from '@/data/resources.mock';
 import { RESOURCE_CATEGORIES, type FilterCategory, type Resource } from '@/types/resource.types';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
 
 const ALL_FILTERS: FilterCategory[] = ['Tous', ...RESOURCE_CATEGORIES];
 
@@ -120,6 +123,9 @@ export default function HomeScreen() {
   );
 
   const searchBorderColor = searchFocused ? colors.inputBorderFocus : colors.border;
+
+  const {isAuthenticated, logout} = useAuth();
+  const {user} = useUser();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
