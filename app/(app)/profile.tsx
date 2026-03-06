@@ -198,6 +198,7 @@ export default function ProfileScreen() {
 
           {/* Edit button */}
           <Pressable
+            onPress={() => router.push('/(app)/edit-profile')}
             style={({ pressed }) => [
               styles.editRow,
               {

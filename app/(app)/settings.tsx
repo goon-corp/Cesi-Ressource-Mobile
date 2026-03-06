@@ -160,6 +160,7 @@ export default function SettingsScreen() {
           <SettingRow
             icon="person-outline"
             label="Modifier mon profil"
+            onPress={() => router.push('/(app)/edit-profile')}
             disabled={!isAuthenticated}
             withDivider
           />
@@ -183,13 +184,23 @@ export default function SettingsScreen() {
         <View
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}
         >
-          <SettingRow icon="information-circle-outline" label="Mentions légales" withDivider />
+          <SettingRow
+            icon="information-circle-outline"
+            label="Mentions légales"
+            onPress={() => router.push('/(app)/mentions-legales')}
+            withDivider
+          />
           <SettingRow
             icon="shield-checkmark-outline"
             label="Politique de confidentialité"
+            onPress={() => router.push('/(app)/politique-confidentialite')}
             withDivider
           />
-          <SettingRow icon="document-text-outline" label="Conditions d'utilisation" />
+          <SettingRow
+            icon="document-text-outline"
+            label="Conditions d'utilisation"
+            onPress={() => router.push('/(app)/conditions-utilisation')}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>

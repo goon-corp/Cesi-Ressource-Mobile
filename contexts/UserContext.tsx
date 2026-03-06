@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { userService } from '@/services/user.service';
-import { UserInfos } from '@/types/user.types';
+import { UpdateUserPayload, UserInfos } from '@/types/user.types';
 import { useAuth } from './AuthContext';
 
 interface UserContextType {
@@ -8,6 +8,7 @@ interface UserContextType {
   isLoadingUser: boolean;
   fetchUser: (userId: string) => Promise<void>;
   refetchUser: () => Promise<void>;
+  updateUser: (payload: UpdateUserPayload) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -34,6 +35,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     await fetchUser(userId);
   }, [userId, fetchUser]);
 
+  const updateUser = useCallback(async (payload: UpdateUserPayload) => {
+    if (!userId) return;
+    const res = await userService.updateUserProfile(userId, payload);
+    setUser(res);
+  }, [userId]);
+
   useEffect(() => {
     if (userId) {
       refetchUser();
@@ -43,7 +50,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, [userId, refetchUser]);
 
   return (
-    <UserContext.Provider value={{ user, isLoadingUser, fetchUser, refetchUser }}>
+    <UserContext.Provider value={{ user, isLoadingUser, fetchUser, refetchUser, updateUser }}>
       {children}
     </UserContext.Provider>
   );
