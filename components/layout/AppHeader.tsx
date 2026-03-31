@@ -11,9 +11,10 @@ interface AppHeaderProps {
   title: string;
   onMenuPress: () => void;
   rightAction?: React.ReactNode;
+  showBack?: boolean;
 }
 
-export function AppHeader({ title, onMenuPress, rightAction }: AppHeaderProps) {
+export function AppHeader({ title, onMenuPress, rightAction, showBack = false }: AppHeaderProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -33,10 +34,14 @@ export function AppHeader({ title, onMenuPress, rightAction }: AppHeaderProps) {
           onPress={onMenuPress}
           style={styles.iconButton}
           accessibilityRole="button"
-          accessibilityLabel="Ouvrir le menu"
+          accessibilityLabel={showBack ? 'Retour' : 'Ouvrir le menu'}
           hitSlop={8}
         >
-          <Ionicons name="menu" size={26} color={colors.textOnPrimary} />
+          <Ionicons
+            name={showBack ? 'arrow-back' : 'menu'}
+            size={26}
+            color={colors.textOnPrimary}
+          />
         </Pressable>
 
         <AppText

@@ -6,16 +6,25 @@ import React, {
   useState,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { jwtDecode } from 'jwt-decode';
 import { authService } from '@/services/auth.service';
-import type { LoginPayload, RegisterPayload, User } from '@/types/auth.types';
+import type { LoginPayload, RegisterPayload } from '@/types/auth.types';
 
 const ACCESS_TOKEN_KEY = 'access_token';
+const USER_ID_KEY = 'user_id';
+
+interface JwtPayload {
+  sub?: string;
+  userId?: string;
+  id?: string;
+  [key: string]: any;
+}
 
 interface AuthContextType {
-  user: User | null;
-  isLoading: boolean;
+  userId: string | null;
   isAuthenticated: boolean;
-  login: (payload: LoginPayload) => Promise<void>;
+  isLoading: boolean;
+  login: (payload: LoginPayload) => Promise<string | null>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
@@ -23,38 +32,61 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function extractUserIdFromToken(token: string): string | null {
+  try {
+    const decoded = jwtDecode<JwtPayload>(token);
+    return decoded.sub || null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    SecureStore.getItemAsync(ACCESS_TOKEN_KEY)
-      .then(async (stored) => {
-        if (stored) {
-          try {
-            const me = await authService.getMe();
-            setUser(me);
-          } catch {
+    Promise.all([
+      SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
+      SecureStore.getItemAsync(USER_ID_KEY),
+    ])
+      .then(async ([token, storedUserId]) => {
+        if (token && storedUserId) {
+          setUserId(storedUserId);
+        } else if (token) {
+          const extractedUserId = extractUserIdFromToken(token);
+          if (extractedUserId) {
+            await SecureStore.setItemAsync(USER_ID_KEY, extractedUserId);
+            setUserId(extractedUserId);
+          } else {
             await authService.logout();
           }
         }
       })
+      .catch(async () => {
+        await authService.logout();
+      })
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(async (payload: LoginPayload) => {
+  const login = useCallback(async (payload: LoginPayload): Promise<string | null> => {
     const res = await authService.login(payload);
-    setUser(res.user);
+    const extractedUserId = extractUserIdFromToken(res.access_token);
+    if (extractedUserId) {
+      await SecureStore.setItemAsync(USER_ID_KEY, extractedUserId);
+      setUserId(extractedUserId);
+    }
+    return extractedUserId;
   }, []);
 
-  const register = useCallback(async (payload: RegisterPayload) => {
-    const res = await authService.register(payload);
-    setUser(res.user);
+  const register = useCallback(async (payload: RegisterPayload): Promise<void> => {
+    await authService.register(payload);
   }, []);
 
   const logout = useCallback(async () => {
     await authService.logout();
-    setUser(null);
+    await SecureStore.deleteItemAsync(USER_ID_KEY);
+    setUserId(null);
   }, []);
 
   const forgotPassword = useCallback(async (email: string) => {
@@ -64,9 +96,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        user,
+        userId,
+        isAuthenticated: !!userId,
         isLoading,
-        isAuthenticated: !!user,
         login,
         register,
         logout,

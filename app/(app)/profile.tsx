@@ -3,7 +3,9 @@ import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { Toast } from 'toastify-react-native';
 import { useAuth } from '@/hooks/useAuth';
+import { useUser } from '@/contexts/UserContext';
 import { useTheme } from '@/hooks/useTheme';
 import { useDrawer } from '@/contexts/DrawerContext';
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -100,7 +102,8 @@ const statStyles = StyleSheet.create({
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
-  const { isAuthenticated, isLoading, user, logout } = useAuth();
+  const { isLoading, logout } = useAuth();
+  const { user } = useUser();
   const { colors } = useTheme();
   const { openDrawer } = useDrawer();
 
@@ -109,21 +112,24 @@ export default function ProfileScreen() {
   const contentAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!isLoading && !user) {
       router.replace('/(auth)/login');
       return;
     }
+
+    
 
     Animated.sequence([
       Animated.timing(headerAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
       Animated.timing(contentAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
     ]).start();
-  }, [isLoading, isAuthenticated, headerAnim, contentAnim]);
+  }, [isLoading, user, headerAnim, contentAnim]);
 
   if (!user) return null;
 
   const handleLogout = async () => {
     await logout();
+    Toast.success('Vous avez été déconnecté.');
   };
 
   const memberSince = new Date(Date.now()).toLocaleDateString('fr-FR', {
@@ -192,6 +198,7 @@ export default function ProfileScreen() {
 
           {/* Edit button */}
           <Pressable
+            onPress={() => router.push('/(app)/edit-profile')}
             style={({ pressed }) => [
               styles.editRow,
               {
