@@ -1,22 +1,40 @@
-export const RESOURCE_CATEGORIES = [
-  'Article',
-  'Vidéo',
-  'Exercice',
-  'Jeu',
-  'Méditation',
-  'Activité',
-] as const;
+export interface ResourceTypeInfo {
+  id: string;
+  label: string;
+}
 
-export type ResourceCategory = (typeof RESOURCE_CATEGORIES)[number];
-export type FilterCategory = ResourceCategory | 'Tous';
+export interface ResourceStatusInfo {
+  id: string;
+  label: string;
+}
 
-export interface Resource {
+export interface ResourceConfidentialityTypeInfo {
+  id: string;
+  label: string;
+}
+
+export interface TagDto {
+  id: string;
+  label: string;
+}
+
+export interface ApiResource {
   id: string;
   title: string;
   description: string;
-  category: ResourceCategory;
-  imageUrl: string;
-  author: string;
-  createdAt: string;
-  likesCount: number;
+  thumbnailId?: string;
+  status?: ResourceStatusInfo;
+  confidentialityType?: ResourceConfidentialityTypeInfo;
+  type?: ResourceTypeInfo;
+  tags: TagDto[];
+}
+
+export interface ApiEvent {
+  id: string;
+  isVirtual: boolean;
+  dateStart: string;
+  dateEnd: string;
+  eventLink?: string;
+  location: string;
+  ressource: ApiResource;
 }

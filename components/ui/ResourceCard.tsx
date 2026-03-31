@@ -5,19 +5,23 @@ import { useTheme } from '@/hooks/useTheme';
 import { AppText } from './AppText';
 import { BorderRadius, Shadow, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
-import type { Resource } from '@/types/resource.types';
+import type { ApiResource } from '@/types/resource.types';
 
-const CATEGORY_COLORS: Record<string, string> = {
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+
+const TYPE_COLORS: Record<string, string> = {
   Article: '#0063CB',
-  Vidéo: '#CE0500',
+  'Vidéo': '#CE0500',
   Exercice: '#18753C',
   Jeu: '#B34000',
-  Méditation: '#6A6AF4',
-  Activité: '#009081',
+  'Méditation': '#6A6AF4',
+  'Activité': '#009081',
+  'Événement': '#B34000',
+  Event: '#B34000',
 };
 
 interface ResourceCardProps {
-  resource: Resource;
+  resource: ApiResource;
   index: number;
   onPress?: () => void;
 }
@@ -32,18 +36,8 @@ export function ResourceCard({ resource, index, onPress }: ResourceCardProps) {
   useEffect(() => {
     const delay = Math.min(index * 70, 420);
     Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 380,
-        delay,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 380,
-        delay,
-        useNativeDriver: true,
-      }),
+      Animated.timing(opacity, { toValue: 1, duration: 380, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 380, delay, useNativeDriver: true }),
     ]).start();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -54,13 +48,11 @@ export function ResourceCard({ resource, index, onPress }: ResourceCardProps) {
   const onPressOut = () =>
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 25 }).start();
 
-  const categoryColor = CATEGORY_COLORS[resource.category] ?? colors.primary;
-
-  const formattedDate = new Date(resource.createdAt).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const typeLabel = resource.type?.label ?? '';
+  const typeColor = TYPE_COLORS[typeLabel] ?? colors.primary;
+  const thumbnailUri = resource.thumbnailId
+    ? `${API_URL}/ressource-medias/${resource.thumbnailId}`
+    : null;
 
   return (
     <Animated.View
@@ -75,48 +67,43 @@ export function ResourceCard({ resource, index, onPress }: ResourceCardProps) {
       ]}
     >
       <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
-        {/* Image */}
         <View>
-          <Image source={{ uri: resource.imageUrl }} style={styles.image} resizeMode="cover" />
-          <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}>
-            <AppText style={{ color: '#fff', fontSize: FontSize.xs, fontWeight: '700' }}>
-              {resource.category}
-            </AppText>
-          </View>
+          {thumbnailUri ? (
+            <Image source={{ uri: thumbnailUri }} style={styles.image} resizeMode="cover" />
+          ) : (
+            <View style={[styles.imagePlaceholder, { backgroundColor: colors.backgroundAlt }]}>
+              <Ionicons name="image-outline" size={36} color={colors.textLight} />
+            </View>
+          )}
+          {typeLabel ? (
+            <View style={[styles.typeBadge, { backgroundColor: typeColor }]}>
+              <AppText style={{ color: '#fff', fontSize: FontSize.xs, fontWeight: '700' }}>
+                {typeLabel}
+              </AppText>
+            </View>
+          ) : null}
         </View>
 
-        {/* Content */}
         <View style={styles.content}>
           <AppText variant="h3" numberOfLines={2} style={{ marginBottom: Spacing.xs }}>
             {resource.title}
           </AppText>
-          <AppText
-            variant="bodySmall"
-            muted
-            numberOfLines={2}
-            style={{ marginBottom: Spacing.md }}
-          >
+          <AppText variant="bodySmall" muted numberOfLines={2} style={{ marginBottom: Spacing.sm }}>
             {resource.description}
           </AppText>
 
-          {/* Footer */}
-          <View style={[styles.footer, { borderTopColor: colors.borderLight }]}>
-            <View style={styles.metaRow}>
-              <Ionicons name="person-circle-outline" size={15} color={colors.textMuted} />
-              <AppText variant="caption" muted style={{ marginLeft: 4 }}>
-                {resource.author}
-              </AppText>
-              <AppText variant="caption" muted style={{ marginLeft: Spacing.sm }}>
-                · {formattedDate}
-              </AppText>
+          {resource.tags.length > 0 && (
+            <View style={styles.tagsRow}>
+              {resource.tags.slice(0, 3).map((tag) => (
+                <View
+                  key={tag.id}
+                  style={[styles.tag, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}
+                >
+                  <AppText variant="caption" muted>{tag.label}</AppText>
+                </View>
+              ))}
             </View>
-            <View style={styles.metaRow}>
-              <Ionicons name="heart-outline" size={15} color={colors.error} />
-              <AppText variant="caption" muted style={{ marginLeft: 4 }}>
-                {resource.likesCount}
-              </AppText>
-            </View>
-          </View>
+          )}
         </View>
       </Pressable>
     </Animated.View>
@@ -132,7 +119,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 175,
   },
-  categoryBadge: {
+  imagePlaceholder: {
+    width: '100%',
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeBadge: {
     position: 'absolute',
     bottom: Spacing.sm,
     left: Spacing.sm,
@@ -143,15 +136,15 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.md,
   },
-  footer: {
+  tagsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  tag: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
   },
 });

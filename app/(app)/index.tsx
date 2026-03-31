@@ -1,16 +1,17 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
 import { useDrawer } from '@/contexts/DrawerContext';
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -19,16 +20,15 @@ import { AppText } from '@/components/ui/AppText';
 import { ResourceCard } from '@/components/ui/ResourceCard';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
-import { MOCK_RESOURCES } from '@/data/resources.mock';
-import { RESOURCE_CATEGORIES, type FilterCategory, type Resource } from '@/types/resource.types';
+import { resourceService } from '@/services/resource.service';
+import { useQuery } from '@/hooks/useQuery';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUser } from '@/contexts/UserContext';
+import type { ApiResource } from '@/types/resource.types';
 
-const ALL_FILTERS: FilterCategory[] = ['Tous', ...RESOURCE_CATEGORIES];
-
-type SortOrder = 'recent' | 'oldest';
+const PAGE_SIZE = 10;
 
 // ─── Category Chip ────────────────────────────────────────────────────────────
+
 interface ChipProps {
   label: string;
   isActive: boolean;
@@ -71,6 +71,7 @@ function CategoryChip({ label, isActive, onPress }: ChipProps) {
 }
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
+
 function EmptyState() {
   const { colors } = useTheme();
   return (
@@ -87,57 +88,120 @@ function EmptyState() {
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function HomeScreen() {
   const { colors } = useTheme();
   const { openDrawer } = useDrawer();
+  const { isAuthenticated } = useAuth();
 
   const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState<FilterCategory>('Tous');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('recent');
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [searchFocused, setSearchFocused] = useState(false);
 
-  const toggleSort = () =>
-    setSortOrder((prev) => (prev === 'recent' ? 'oldest' : 'recent'));
+  const [resources, setResources] = useState<ApiResource[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const filtered = useMemo<Resource[]>(() => {
-    const base = MOCK_RESOURCES.filter((r) => {
-      const matchCat = activeFilter === 'Tous' || r.category === activeFilter;
-      const matchSearch =
-        !search.trim() ||
-        r.title.toLowerCase().includes(search.trim().toLowerCase());
-      return matchCat && matchSearch;
-    });
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-    return [...base].sort((a, b) => {
-      const diff =
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      return sortOrder === 'recent' ? -diff : diff;
-    });
-  }, [search, activeFilter, sortOrder]);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [search]);
+
+  const { data: resourceTypes } = useQuery(
+    ['resource-types'],
+    () => resourceService.getResourceTypes(),
+  );
+
+  const fetchResources = useCallback(async (pageNum: number, reset: boolean) => {
+    if (reset) setIsLoading(true);
+    else setIsLoadingMore(true);
+
+    try {
+      const result = await resourceService.getResources({
+        page: pageNum,
+        size: PAGE_SIZE,
+        ...(debouncedSearch ? { RessourceTitle: debouncedSearch } : {}),
+        ...(activeFilter ? { RessourceType: activeFilter } : {}),
+      });
+      const items = Array.isArray(result) ? result : [];
+      if (reset) {
+        setResources(items);
+      } else {
+        setResources((prev) => [...prev, ...items]);
+      }
+      setHasNextPage(items.length >= PAGE_SIZE);
+      setPage(pageNum);
+    } catch {
+      // silently handled — error feedback could be added later
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, [debouncedSearch, activeFilter]);
+
+  useEffect(() => {
+    fetchResources(1, true);
+  }, [fetchResources]);
+
+  const loadMore = useCallback(() => {
+    if (!hasNextPage || isLoadingMore || isLoading) return;
+    fetchResources(page + 1, false);
+  }, [hasNextPage, isLoadingMore, isLoading, page, fetchResources]);
 
   const renderItem = useCallback(
-    ({ item, index }: { item: Resource; index: number }) => (
-      <ResourceCard resource={item} index={index} />
+    ({ item, index }: { item: ApiResource; index: number }) => (
+      <ResourceCard
+        resource={item}
+        index={index}
+        onPress={() =>
+          router.push({
+            pathname: '/(app)/resources/[id]',
+            params: { id: item.id, resourceType: item.type?.label ?? '' },
+          })
+        }
+      />
     ),
     [],
   );
 
-  const searchBorderColor = searchFocused ? colors.inputBorderFocus : colors.border;
+  const filters = useMemo<string[]>(
+    () => (resourceTypes ?? []).map((t) => t.label),
+    [resourceTypes],
+  );
 
-  const {isAuthenticated, logout} = useAuth();
-  const {user} = useUser();
+  const searchBorderColor = searchFocused ? colors.inputBorderFocus : colors.border;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
       <AppHeader
         title="Ressources Relationnelles"
         onMenuPress={openDrawer}
-        rightAction={<HeaderAuthAction />}
+        rightAction={
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
+            {isAuthenticated && (
+              <Pressable
+                onPress={() => router.push('/(app)/resources/create')}
+                style={styles.addBtn}
+                accessibilityLabel="Créer une ressource"
+                hitSlop={8}
+              >
+                <Ionicons name="add" size={24} color={colors.textOnPrimary} />
+              </Pressable>
+            )}
+            <HeaderAuthAction />
+          </View>
+        }
       />
 
-      {/* ── Search + Filters (hors FlatList pour garantir les mises à jour) ── */}
       <View style={[styles.controls, { backgroundColor: colors.background }]}>
-        {/* Search bar */}
         <View
           style={[
             styles.searchBar,
@@ -162,14 +226,18 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Category chips */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filtersRow}
           keyboardShouldPersistTaps="handled"
         >
-          {ALL_FILTERS.map((f) => (
+          <CategoryChip
+            label="Tous"
+            isActive={activeFilter === null}
+            onPress={() => setActiveFilter(null)}
+          />
+          {filters.map((f) => (
             <CategoryChip
               key={f}
               label={f}
@@ -179,44 +247,41 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
-        {/* Toolbar: result count + date sort */}
         <View style={[styles.toolbar, { borderBottomColor: colors.borderLight }]}>
           <AppText variant="caption" muted>
-            {filtered.length} ressource{filtered.length !== 1 ? 's' : ''}
+            {isLoading
+              ? 'Chargement...'
+              : `${resources.length} ressource${resources.length !== 1 ? 's' : ''}`}
           </AppText>
-
-          <Pressable
-            onPress={toggleSort}
-            style={[styles.sortBtn, { borderColor: colors.border }]}
-            accessibilityLabel={`Trier par date : ${sortOrder === 'recent' ? 'plus récent d\'abord' : 'plus ancien d\'abord'}`}
-          >
-            <Ionicons
-              name={sortOrder === 'recent' ? 'arrow-down' : 'arrow-up'}
-              size={13}
-              color={colors.primary}
-            />
-            <AppText
-              variant="caption"
-              style={{ color: colors.primary, fontWeight: '600', marginLeft: 3 }}
-            >
-              {sortOrder === 'recent' ? 'Plus récent' : 'Plus ancien'}
-            </AppText>
-          </Pressable>
         </View>
       </View>
 
-      {/* ── Resource list ── */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
-        ListEmptyComponent={<EmptyState />}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      />
+      {isLoading ? (
+        <View style={styles.loadingCenter}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={resources}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+          ListEmptyComponent={<EmptyState />}
+          ListFooterComponent={
+            isLoadingMore ? (
+              <View style={{ paddingVertical: Spacing.lg, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            ) : null
+          }
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -261,14 +326,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
     marginBottom: Spacing.md,
   },
-  sortBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-  },
   listContent: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.xl,
@@ -276,5 +333,13 @@ const styles = StyleSheet.create({
   empty: {
     alignItems: 'center',
     paddingVertical: Spacing['3xl'],
+  },
+  loadingCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtn: {
+    padding: Spacing.xs,
   },
 });

@@ -28,7 +28,7 @@ function RootNavigator() {
     // Redirect authenticated users away from auth screens
     const inAuthGroup = segments[0] === '(auth)';
     if (isAuthenticated && inAuthGroup) {
-      router.replace('/(app)/');
+      router.replace('/(app)');
     }
   }, [isAuthenticated, isLoading, segments, router]);
 
