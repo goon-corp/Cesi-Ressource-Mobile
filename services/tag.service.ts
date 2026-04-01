@@ -3,8 +3,8 @@ import type { TagDto } from '@/types/resource.types';
 
 export const tagService = {
   getTags: (params?: { page?: number; size?: number }) =>
-    api.get<TagDto[]>('/tags', false, params),
+    api.get<TagDto[]>('/tag', false, params),
 
   createTag: (label: string) =>
-    api.post<TagDto>('/tags', { label }, true),
+    api.post<TagDto>('/tag', { label }, true),
 };

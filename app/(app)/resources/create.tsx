@@ -19,6 +19,7 @@ import { Toast } from 'toastify-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { AppText } from '@/components/ui/AppText';
 import { AppTextInput } from '@/components/ui/AppTextInput';
+import { AppDatePicker } from '@/components/ui/AppDatePicker';
 import { AppButton } from '@/components/ui/AppButton';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
@@ -476,11 +477,11 @@ export default function CreateResourceScreen() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [localTags, setLocalTags] = useState<TagDto[]>([]);
 
-  const { data: resourceTypes, isLoading: loadingTypes } = useQuery(
+  const { data: resourceTypes, isLoading: loadingTypes, error: errorTypes } = useQuery(
     ['resource-types'],
     () => resourceService.getResourceTypes(),
   );
-  const { data: confidentialityTypes, isLoading: loadingConfTypes } = useQuery(
+  const { data: confidentialityTypes, isLoading: loadingConfTypes, error: errorConfTypes } = useQuery(
     ['confidentiality-types'],
     () => resourceService.getConfidentialityTypes(),
   );
@@ -489,7 +490,7 @@ export default function CreateResourceScreen() {
     () => resourceService.getStatuses(),
   );
   const { data: tagsData, isLoading: loadingTags } = useQuery(
-    ['tags'],
+    ['tags-list'],
     () => tagService.getTags({ size: 50 }),
   );
 
@@ -533,7 +534,7 @@ export default function CreateResourceScreen() {
 
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  const { mutate: createEvent, isLoading: isSubmitting } = useMutation(
+  const { mutate: createEvent, isLoading: isSubmitting, error: createError } = useMutation(
     (payload: CreateEventPayload) => eventService.createEvent(payload),
   );
 
@@ -564,7 +565,7 @@ export default function CreateResourceScreen() {
       Toast.success('Ressource créée avec succès !');
       router.back();
     } else {
-      Toast.error('Une erreur est survenue lors de la création.');
+      Toast.error(createError?.message ?? 'Une erreur est survenue lors de la création.');
     }
   };
 
@@ -624,7 +625,7 @@ export default function CreateResourceScreen() {
             <View>
               <AppText variant="h3" style={{ marginBottom: Spacing.lg }}>Catégorisation</AppText>
 
-              {loadingTypes ? (
+              {loadingTypes && !errorTypes ? (
                 <ActivityIndicator color={colors.primary} style={{ marginBottom: Spacing.md }} />
               ) : (
                 <AppSelect
@@ -634,11 +635,11 @@ export default function CreateResourceScreen() {
                   options={resourceTypes ?? []}
                   value={form.typeId || null}
                   onChange={(id) => setField('typeId', id)}
-                  error={errors.typeId}
+                  error={errors.typeId ?? (errorTypes ? 'Impossible de charger les types' : undefined)}
                 />
               )}
 
-              {loadingConfTypes ? (
+              {loadingConfTypes && !errorConfTypes ? (
                 <ActivityIndicator color={colors.primary} style={{ marginBottom: Spacing.md }} />
               ) : (
                 <AppSelect
@@ -648,7 +649,7 @@ export default function CreateResourceScreen() {
                   options={confidentialityTypes ?? []}
                   value={form.confidentialityTypeId || null}
                   onChange={(id) => setField('confidentialityTypeId', id)}
-                  error={errors.confidentialityTypeId}
+                  error={errors.confidentialityTypeId ?? (errorConfTypes ? 'Impossible de charger les confidentialités' : undefined)}
                 />
               )}
 
@@ -717,24 +718,20 @@ export default function CreateResourceScreen() {
                     />
                   )}
 
-                  <AppTextInput
+                  <AppDatePicker
                     label="Date de début"
                     required
-                    placeholder="YYYY-MM-DDTHH:MM"
-                    value={form.dateStart}
-                    onChangeText={(v) => setField('dateStart', v)}
+                    value={form.dateStart || undefined}
+                    onChange={(iso) => setField('dateStart', iso)}
                     error={errors.dateStart}
-                    hint="Ex: 2025-06-15T09:00"
                   />
 
-                  <AppTextInput
+                  <AppDatePicker
                     label="Date de fin"
                     required
-                    placeholder="YYYY-MM-DDTHH:MM"
-                    value={form.dateEnd}
-                    onChangeText={(v) => setField('dateEnd', v)}
+                    value={form.dateEnd || undefined}
+                    onChange={(iso) => setField('dateEnd', iso)}
                     error={errors.dateEnd}
-                    hint="Ex: 2025-06-15T18:00"
                   />
                 </>
               )}

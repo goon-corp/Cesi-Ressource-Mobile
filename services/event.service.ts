@@ -32,7 +32,7 @@ export const eventService = {
     formData.append('IsVirtual', payload.isVirtual.toString());
     formData.append('DateStart', payload.dateStart);
     formData.append('DateEnd', payload.dateEnd);
-    if (payload.eventLink) formData.append('EventLink', payload.eventLink);
+    formData.append('EventLink', payload.eventLink ?? '');
     formData.append('Location', payload.location);
 
     return api.upload<ApiEvent>('POST', '/events', formData, true);
