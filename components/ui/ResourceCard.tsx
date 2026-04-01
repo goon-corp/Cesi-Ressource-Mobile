@@ -50,8 +50,8 @@ export function ResourceCard({ resource, index, onPress }: ResourceCardProps) {
 
   const typeLabel = resource.type?.label ?? '';
   const typeColor = TYPE_COLORS[typeLabel] ?? colors.primary;
-  const thumbnailUri = resource.thumbnailId
-    ? `${API_URL}/ressource-medias/${resource.thumbnailId}`
+  const thumbnailUri = resource.thumbnail_id
+    ? `${API_URL}/ressource-medias/${resource.thumbnail_id}`
     : null;
 
   return (

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
 import { useDrawer } from '@/contexts/DrawerContext';
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -21,6 +21,7 @@ import { ResourceCard } from '@/components/ui/ResourceCard';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
 import { resourceService } from '@/services/resource.service';
+import { tagService } from '@/services/tag.service';
 import { useQuery } from '@/hooks/useQuery';
 import { useAuth } from '@/contexts/AuthContext';
 import type { ApiResource } from '@/types/resource.types';
@@ -96,6 +97,7 @@ export default function HomeScreen() {
 
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
 
   const [resources, setResources] = useState<ApiResource[]>([]);
@@ -106,6 +108,7 @@ export default function HomeScreen() {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const hasFocused = useRef(false);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -120,6 +123,13 @@ export default function HomeScreen() {
     () => resourceService.getResourceTypes(),
   );
 
+  const { data: tagsData } = useQuery(
+    ['tags-list'],
+    () => tagService.getTags({ size: 100 }),
+  );
+
+  const allTags = useMemo(() => (Array.isArray(tagsData) ? tagsData : []), [tagsData]);
+
   const fetchResources = useCallback(async (pageNum: number, reset: boolean) => {
     if (reset) setIsLoading(true);
     else setIsLoadingMore(true);
@@ -130,6 +140,7 @@ export default function HomeScreen() {
         size: PAGE_SIZE,
         ...(debouncedSearch ? { RessourceTitle: debouncedSearch } : {}),
         ...(activeFilter ? { RessourceType: activeFilter } : {}),
+        ...(selectedTagIds.length > 0 ? { RessourceTags: selectedTagIds } : {}),
       });
       const items = Array.isArray(result) ? result : [];
       if (reset) {
@@ -140,16 +151,26 @@ export default function HomeScreen() {
       setHasNextPage(items.length >= PAGE_SIZE);
       setPage(pageNum);
     } catch {
-      // silently handled — error feedback could be added later
+      // silently handled
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
     }
-  }, [debouncedSearch, activeFilter]);
+  }, [debouncedSearch, activeFilter, selectedTagIds]);
 
+  // Handles filter/search/tag changes after initial mount
   useEffect(() => {
+    if (!hasFocused.current) return;
     fetchResources(1, true);
   }, [fetchResources]);
+
+  // Handles initial load + returning from create/detail
+  useFocusEffect(
+    useCallback(() => {
+      hasFocused.current = true;
+      fetchResources(1, true);
+    }, [fetchResources]),
+  );
 
   const loadMore = useCallback(() => {
     if (!hasNextPage || isLoadingMore || isLoading) return;
@@ -176,6 +197,12 @@ export default function HomeScreen() {
     () => (resourceTypes ?? []).map((t) => t.label),
     [resourceTypes],
   );
+
+  const toggleTag = useCallback((id: string) => {
+    setSelectedTagIds((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+    );
+  }, []);
 
   const searchBorderColor = searchFocused ? colors.inputBorderFocus : colors.border;
 
@@ -242,10 +269,28 @@ export default function HomeScreen() {
               key={f}
               label={f}
               isActive={activeFilter === f}
-              onPress={() => setActiveFilter(f)}
+              onPress={() => setActiveFilter(activeFilter === f ? null : f)}
             />
           ))}
         </ScrollView>
+
+        {allTags.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersRow}
+            keyboardShouldPersistTaps="handled"
+          >
+            {allTags.map((tag) => (
+              <CategoryChip
+                key={tag.id}
+                label={tag.label}
+                isActive={selectedTagIds.includes(tag.id)}
+                onPress={() => toggleTag(tag.id)}
+              />
+            ))}
+          </ScrollView>
+        )}
 
         <View style={[styles.toolbar, { borderBottomColor: colors.borderLight }]}>
           <AppText variant="caption" muted>
@@ -253,6 +298,13 @@ export default function HomeScreen() {
               ? 'Chargement...'
               : `${resources.length} ressource${resources.length !== 1 ? 's' : ''}`}
           </AppText>
+          {selectedTagIds.length > 0 && (
+            <Pressable onPress={() => setSelectedTagIds([])} hitSlop={8}>
+              <AppText variant="caption" style={{ color: colors.primary }}>
+                Effacer les tags
+              </AppText>
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -272,6 +324,14 @@ export default function HomeScreen() {
               <View style={{ paddingVertical: Spacing.lg, alignItems: 'center' }}>
                 <ActivityIndicator size="small" color={colors.primary} />
               </View>
+            ) : hasNextPage ? (
+              <Pressable
+                style={[styles.loadMoreBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                onPress={loadMore}
+              >
+                <AppText variant="label" style={{ color: colors.primary }}>Charger plus</AppText>
+                <Ionicons name="chevron-down" size={16} color={colors.primary} style={{ marginLeft: Spacing.xs }} />
+              </Pressable>
             ) : null
           }
           contentContainerStyle={styles.listContent}
@@ -341,5 +401,15 @@ const styles = StyleSheet.create({
   },
   addBtn: {
     padding: Spacing.xs,
+  },
+  loadMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: Spacing.md,
+    marginVertical: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
   },
 });

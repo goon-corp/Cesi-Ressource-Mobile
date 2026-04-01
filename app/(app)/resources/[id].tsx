@@ -54,16 +54,16 @@ function EventDetail({ event }: { event: ApiEvent }) {
     <View>
       <View style={[styles.infoRow, { borderBottomColor: colors.borderLight }]}>
         <Ionicons
-          name={event.isVirtual ? 'globe-outline' : 'location-outline'}
+          name={event.is_virtual ? 'globe-outline' : 'location-outline'}
           size={18}
           color={colors.primary}
         />
         <AppText variant="body" style={{ flex: 1, marginLeft: Spacing.sm }}>
-          {event.isVirtual ? 'Événement en ligne' : event.location}
+          {event.is_virtual ? 'Événement en ligne' : event.location}
         </AppText>
       </View>
 
-      {event.isVirtual && event.eventLink ? (
+      {event.is_virtual && event.event_link ? (
         <View style={[styles.infoRow, { borderBottomColor: colors.borderLight }]}>
           <Ionicons name="link-outline" size={18} color={colors.primary} />
           <AppText
@@ -71,7 +71,7 @@ function EventDetail({ event }: { event: ApiEvent }) {
             style={{ flex: 1, marginLeft: Spacing.sm }}
             numberOfLines={1}
           >
-            {event.eventLink}
+            {event.event_link}
           </AppText>
         </View>
       ) : null}
@@ -80,7 +80,7 @@ function EventDetail({ event }: { event: ApiEvent }) {
         <Ionicons name="calendar-outline" size={18} color={colors.primary} />
         <View style={{ flex: 1, marginLeft: Spacing.sm }}>
           <AppText variant="caption" muted>Début</AppText>
-          <AppText variant="body">{formatDate(event.dateStart)}</AppText>
+          <AppText variant="body">{formatDate(event.date_start)}</AppText>
         </View>
       </View>
 
@@ -88,7 +88,7 @@ function EventDetail({ event }: { event: ApiEvent }) {
         <Ionicons name="calendar-outline" size={18} color={colors.info} />
         <View style={{ flex: 1, marginLeft: Spacing.sm }}>
           <AppText variant="caption" muted>Fin</AppText>
-          <AppText variant="body">{formatDate(event.dateEnd)}</AppText>
+          <AppText variant="body">{formatDate(event.date_end)}</AppText>
         </View>
       </View>
     </View>
@@ -160,11 +160,11 @@ export default function ResourceDetailScreen() {
         </AppText>
 
         <View style={styles.metaBadges}>
-          {resource?.confidentialityType ? (
+          {resource?.confidentiality_type ? (
             <View style={[styles.badge, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}>
               <Ionicons name="shield-outline" size={13} color={colors.textMuted} />
               <AppText variant="caption" muted style={{ marginLeft: 4 }}>
-                {resource.confidentialityType.label}
+                {resource.confidentiality_type.label}
               </AppText>
             </View>
           ) : null}

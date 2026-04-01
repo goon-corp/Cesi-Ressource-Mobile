@@ -11,6 +11,7 @@ export interface ResourceQueryParams {
   size?: number;
   RessourceTitle?: string;
   RessourceType?: string;
+  RessourceTags?: string[];
 }
 
 export const resourceService = {

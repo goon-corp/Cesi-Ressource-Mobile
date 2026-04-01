@@ -22,19 +22,19 @@ export interface ApiResource {
   id: string;
   title: string;
   description: string;
-  thumbnailId?: string;
+  thumbnail_id?: string;
   status?: ResourceStatusInfo;
-  confidentialityType?: ResourceConfidentialityTypeInfo;
+  confidentiality_type?: ResourceConfidentialityTypeInfo;
   type?: ResourceTypeInfo;
   tags: TagDto[];
 }
 
 export interface ApiEvent {
   id: string;
-  isVirtual: boolean;
-  dateStart: string;
-  dateEnd: string;
-  eventLink?: string;
+  is_virtual: boolean;
+  date_start: string;
+  date_end: string;
+  event_link?: string;
   location: string;
   ressource: ApiResource;
 }

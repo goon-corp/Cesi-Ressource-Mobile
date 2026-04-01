@@ -19,13 +19,16 @@ export class ApiError extends Error {
 
 // ─── Query params helper ──────────────────────────────────────────────────────
 
-export type QueryParams = Record<string, string | number | boolean | null | undefined>;
+export type QueryParams = Record<string, string | number | boolean | null | undefined | string[]>;
 
 function buildUrl(path: string, params?: QueryParams): string {
   if (!params) return `${API_URL}${path}`;
   const qs = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined) {
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value)) {
+      value.forEach((v) => qs.append(key, v));
+    } else {
       qs.append(key, String(value));
     }
   }

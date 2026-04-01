@@ -14,7 +14,8 @@ export function HeaderAuthAction() {
   const { user } = useUser();
   const { colors } = useTheme();
 
-  if (isAuthenticated && user) {
+  if (isAuthenticated) {
+    const displayName = user ? `${user.first_name} ${user.last_name}` : '';
     return (
       <Pressable
         onPress={() => router.push('/(app)/profile')}
@@ -23,7 +24,7 @@ export function HeaderAuthAction() {
         accessibilityRole="button"
       >
         <Avatar
-          name={`${user.first_name} ${user.last_name}`}
+          name={displayName}
           size={34}
           backgroundColor="rgba(255,255,255,0.2)"
           textColor={colors.textOnPrimary}
