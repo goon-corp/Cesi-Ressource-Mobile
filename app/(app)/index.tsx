@@ -177,7 +177,11 @@ export default function HomeScreen() {
         onPress={() =>
           router.push({
             pathname: '/(app)/resources/[id]',
-            params: { id: item.id, resourceType: item.type?.label ?? '' },
+            params: {
+              id: item.id,
+              resourceType: item.type?.label ?? '',
+              resourceData: JSON.stringify(item),
+            },
           })
         }
       />

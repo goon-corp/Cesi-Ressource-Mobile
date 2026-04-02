@@ -38,3 +38,21 @@ export interface ApiEvent {
   location: string;
   ressource: ApiResource;
 }
+
+export interface ApiArticle {
+  id: string;
+  content: string;
+  ressource: ApiResource;
+}
+
+export interface ApiQuiz {
+  id: string;
+  participation_count: number;
+  ressource_id: string;
+}
+
+export interface ApiPoll {
+  id: string;
+  vote_count: number;
+  ressource_id: string;
+}

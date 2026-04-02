@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,7 +14,8 @@ import { AppText } from '@/components/ui/AppText';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { useQuery } from '@/hooks/useQuery';
 import { eventService } from '@/services/event.service';
-import type { ApiEvent } from '@/types/resource.types';
+import { articleService } from '@/services/article.service';
+import type { ApiEvent, ApiArticle, ApiResource } from '@/types/resource.types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -27,16 +28,11 @@ function isEventLabel(label: string): boolean {
   return n.includes('event') || n.includes('venement');
 }
 
-type ResourceFetcher = () => Promise<ApiEvent>;
-
-function getResourceFetcher(resourceType: string, id: string): ResourceFetcher | null {
-  if (isEventLabel(resourceType)) {
-    return () => eventService.getEventByResourceId(id);
-  }
-  return null;
+function isArticleLabel(label: string): boolean {
+  return normalizeLabel(label).includes('article');
 }
 
-// ─── Event Detail ─────────────────────────────────────────────────────────────
+// ─── Type-specific detail components ─────────────────────────────────────────
 
 function EventDetail({ event }: { event: ApiEvent }) {
   const { colors } = useTheme();
@@ -95,35 +91,67 @@ function EventDetail({ event }: { event: ApiEvent }) {
   );
 }
 
+function ArticleDetail({ article }: { article: ApiArticle }) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={[styles.articleContent, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+      <AppText variant="body" style={{ lineHeight: 24 }}>
+        {article.content}
+      </AppText>
+    </View>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ResourceDetailScreen() {
-  const { id, resourceType } = useLocalSearchParams<{ id: string; resourceType: string }>();
+  const { id, resourceType, resourceData } = useLocalSearchParams<{
+    id: string;
+    resourceType: string;
+    resourceData?: string;
+  }>();
   const { colors } = useTheme();
 
-  const fetcher = id && resourceType ? getResourceFetcher(resourceType, id) : null;
+  const isEvent = isEventLabel(resourceType ?? '');
+  const isArticle = isArticleLabel(resourceType ?? '');
 
-  const { data, isLoading, error } = useQuery(
-    ['resource-detail', id, resourceType],
-    fetcher ?? (() => Promise.resolve(null as unknown as ApiEvent)),
-    { enabled: !!fetcher },
+  const { data: eventData, isLoading: loadingEvent, error: errorEvent } = useQuery(
+    ['resource-detail-event', id],
+    () => eventService.getEventByResourceId(id!),
+    { enabled: !!id && isEvent },
   );
 
-  const resource = data?.ressource ?? null;
+  const { data: articleData, isLoading: loadingArticle, error: errorArticle } = useQuery(
+    ['resource-detail-article', id],
+    () => articleService.getArticleByResourceId(id!),
+    { enabled: !!id && isArticle },
+  );
+
+  const fallbackResource: ApiResource | null = useMemo(() => {
+    if (!resourceData) return null;
+    try {
+      return JSON.parse(resourceData) as ApiResource;
+    } catch {
+      return null;
+    }
+  }, [resourceData]);
+
+  const isLoading = loadingEvent || loadingArticle;
+  const hasError = (isEvent && errorEvent) || (isArticle && errorArticle);
+  const hasFetcher = isEvent || isArticle;
+
+  const resource: ApiResource | null =
+    eventData?.ressource ?? articleData?.ressource ?? fallbackResource ?? null;
+
+  const renderSpecificContent = () => {
+    if (isEvent && eventData) return <EventDetail event={eventData} />;
+    if (isArticle && articleData) return <ArticleDetail article={articleData} />;
+    return null;
+  };
 
   const renderContent = () => {
-    if (!fetcher) {
-      return (
-        <View style={styles.centered}>
-          <Ionicons name="construct-outline" size={48} color={colors.textLight} />
-          <AppText variant="body" muted center style={{ marginTop: Spacing.md }}>
-            Ce type de ressource n'est pas encore pris en charge.
-          </AppText>
-        </View>
-      );
-    }
-
-    if (isLoading) {
+    if (hasFetcher && isLoading) {
       return (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -131,12 +159,23 @@ export default function ResourceDetailScreen() {
       );
     }
 
-    if (error || !data) {
+    if (hasFetcher && hasError && !resource) {
       return (
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
           <AppText variant="body" muted center style={{ marginTop: Spacing.md }}>
             Impossible de charger la ressource.
+          </AppText>
+        </View>
+      );
+    }
+
+    if (!resource) {
+      return (
+        <View style={styles.centered}>
+          <Ionicons name="document-outline" size={48} color={colors.textLight} />
+          <AppText variant="body" muted center style={{ marginTop: Spacing.md }}>
+            Ressource introuvable.
           </AppText>
         </View>
       );
@@ -156,11 +195,11 @@ export default function ResourceDetailScreen() {
         ) : null}
 
         <AppText variant="h2" style={{ marginBottom: Spacing.sm }}>
-          {resource?.title ?? ''}
+          {resource.title}
         </AppText>
 
         <View style={styles.metaBadges}>
-          {resource?.confidentiality_type ? (
+          {resource.confidentiality_type ? (
             <View style={[styles.badge, { backgroundColor: colors.backgroundAlt, borderColor: colors.border }]}>
               <Ionicons name="shield-outline" size={13} color={colors.textMuted} />
               <AppText variant="caption" muted style={{ marginLeft: 4 }}>
@@ -168,7 +207,7 @@ export default function ResourceDetailScreen() {
               </AppText>
             </View>
           ) : null}
-          {resource?.status ? (
+          {resource.status ? (
             <View style={[styles.badge, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
               <AppText variant="caption" style={{ color: colors.success }}>
                 {resource.status.label}
@@ -179,19 +218,19 @@ export default function ResourceDetailScreen() {
 
         <View style={[styles.section, { borderTopColor: colors.borderLight }]}>
           <AppText variant="label" style={{ marginBottom: Spacing.xs }}>Description</AppText>
-          <AppText variant="body">{resource?.description ?? ''}</AppText>
+          <AppText variant="body">{resource.description}</AppText>
         </View>
 
-        <View style={[styles.section, { borderTopColor: colors.borderLight }]}>
-          <AppText variant="label" style={{ marginBottom: Spacing.md }}>
-            Informations spécifiques
-          </AppText>
-          {isEventLabel(resourceType ?? '') ? (
-            <EventDetail event={data} />
-          ) : null}
-        </View>
+        {renderSpecificContent() ? (
+          <View style={[styles.section, { borderTopColor: colors.borderLight }]}>
+            <AppText variant="label" style={{ marginBottom: Spacing.md }}>
+              {isArticle ? 'Contenu' : 'Informations spécifiques'}
+            </AppText>
+            {renderSpecificContent()}
+          </View>
+        ) : null}
 
-        {resource?.tags && resource.tags.length > 0 ? (
+        {resource.tags && resource.tags.length > 0 ? (
           <View style={[styles.section, { borderTopColor: colors.borderLight }]}>
             <AppText variant="label" style={{ marginBottom: Spacing.sm }}>Tags</AppText>
             <View style={styles.tagsRow}>
@@ -278,6 +317,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
+  },
+  articleContent: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
   },
   tagsRow: {
     flexDirection: 'row',

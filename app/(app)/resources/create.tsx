@@ -30,6 +30,9 @@ import { useMutation } from '@/hooks/useMutation';
 import { resourceService } from '@/services/resource.service';
 import { tagService } from '@/services/tag.service';
 import { eventService, type CreateEventPayload } from '@/services/event.service';
+import { articleService, type CreateArticlePayload } from '@/services/article.service';
+import { quizService, type CreateQuizPayload } from '@/services/quiz.service';
+import { pollService, type CreatePollPayload } from '@/services/poll.service';
 import type { TagDto } from '@/types/resource.types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -41,6 +44,19 @@ function normalizeLabel(label: string): string {
 function isEventLabel(label: string): boolean {
   const n = normalizeLabel(label);
   return n.includes('event') || n.includes('venement');
+}
+
+function isArticleLabel(label: string): boolean {
+  return normalizeLabel(label).includes('article');
+}
+
+function isQuizLabel(label: string): boolean {
+  return normalizeLabel(label).includes('quiz');
+}
+
+function isPollLabel(label: string): boolean {
+  const n = normalizeLabel(label);
+  return n.includes('poll') || n.includes('sondage');
 }
 
 // ─── Stepper ─────────────────────────────────────────────────────────────────
@@ -447,6 +463,7 @@ interface FormState {
   dateEnd: string;
   location: string;
   eventLink: string;
+  content: string;
   thumbnail: ImagePicker.ImagePickerAsset | null;
 }
 
@@ -458,6 +475,7 @@ interface FormErrors {
   dateStart?: string;
   dateEnd?: string;
   location?: string;
+  content?: string;
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -476,6 +494,7 @@ export default function CreateResourceScreen() {
     dateEnd: '',
     location: '',
     eventLink: '',
+    content: '',
     thumbnail: null,
   });
   const [errors, setErrors] = useState<FormErrors>({});
@@ -505,7 +524,11 @@ export default function CreateResourceScreen() {
   }, [tagsData, localTags]);
 
   const selectedType = resourceTypes?.find((t) => t.id === form.typeId);
-  const isEventType = selectedType ? isEventLabel(selectedType.label) : false;
+  const typeLabel = selectedType?.label ?? '';
+  const isEventType = isEventLabel(typeLabel);
+  const isArticleType = isArticleLabel(typeLabel);
+  const isQuizType = isQuizLabel(typeLabel);
+  const isPollType = isPollLabel(typeLabel);
 
   const setField = useCallback(<K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -537,6 +560,8 @@ export default function CreateResourceScreen() {
       if (!form.dateStart) next.dateStart = 'La date de début est requise.';
       if (!form.dateEnd) next.dateEnd = 'La date de fin est requise.';
       if (!form.isVirtual && !form.location.trim()) next.location = 'Le lieu est requis.';
+    } else if (step === 2 && isArticleType) {
+      if (!form.content.trim()) next.content = 'Le contenu est requis.';
     }
 
     setErrors(next);
@@ -550,9 +575,20 @@ export default function CreateResourceScreen() {
 
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  const { mutate: createEvent, isLoading: isSubmitting } = useMutation(
+  const { mutate: createEvent, isLoading: isSubmittingEvent } = useMutation(
     (payload: CreateEventPayload) => eventService.createEvent(payload),
   );
+  const { mutate: createArticle, isLoading: isSubmittingArticle } = useMutation(
+    (payload: CreateArticlePayload) => articleService.createArticle(payload),
+  );
+  const { mutate: createQuiz, isLoading: isSubmittingQuiz } = useMutation(
+    (payload: CreateQuizPayload) => quizService.createQuiz(payload),
+  );
+  const { mutate: createPoll, isLoading: isSubmittingPoll } = useMutation(
+    (payload: CreatePollPayload) => pollService.createPoll(payload),
+  );
+
+  const isSubmitting = isSubmittingEvent || isSubmittingArticle || isSubmittingQuiz || isSubmittingPoll;
 
   const handleSubmit = async () => {
     if (isSubmitting || !validateStep()) return;
@@ -563,20 +599,34 @@ export default function CreateResourceScreen() {
       return;
     }
 
-    const result = await createEvent({
+    const base = {
       title: form.title.trim(),
       description: form.description.trim(),
       statusId,
       confidentialityTypeId: form.confidentialityTypeId,
       typeId: form.typeId,
       tags: form.tags,
-      isVirtual: form.isVirtual,
-      dateStart: form.dateStart,
-      dateEnd: form.dateEnd,
-      location: form.isVirtual ? (form.location.trim() || 'En ligne') : form.location.trim(),
-      eventLink: form.eventLink.trim() || undefined,
       thumbnail: form.thumbnail ?? undefined,
-    });
+    };
+
+    let result: unknown = null;
+
+    if (isEventType) {
+      result = await createEvent({
+        ...base,
+        isVirtual: form.isVirtual,
+        dateStart: form.dateStart,
+        dateEnd: form.dateEnd,
+        location: form.isVirtual ? (form.location.trim() || 'En ligne') : form.location.trim(),
+        eventLink: form.eventLink.trim() || undefined,
+      });
+    } else if (isArticleType) {
+      result = await createArticle({ ...base, content: form.content.trim() });
+    } else if (isQuizType) {
+      result = await createQuiz(base);
+    } else if (isPollType) {
+      result = await createPoll(base);
+    }
 
     if (result) {
       Toast.success('Ressource créée avec succès !');
@@ -719,13 +769,27 @@ export default function CreateResourceScreen() {
           {step === 2 && (
             <View>
               <AppText variant="h3" style={{ marginBottom: Spacing.xs }}>
-                {isEventType ? "Détails de l'événement" : 'Détails spécifiques'}
+                {isEventType ? "Détails de l'événement" : isArticleType ? "Contenu de l'article" : 'Détails spécifiques'}
               </AppText>
 
-              {!isEventType && (
+              {!isEventType && !isArticleType && (
                 <AppText variant="body" muted style={{ marginTop: Spacing.sm }}>
                   Aucun champ supplémentaire requis pour ce type de ressource.
                 </AppText>
+              )}
+
+              {isArticleType && (
+                <AppTextInput
+                  label="Contenu"
+                  required
+                  placeholder="Rédigez le contenu de votre article..."
+                  value={form.content}
+                  onChangeText={(v) => setField('content', v)}
+                  error={errors.content}
+                  multiline
+                  numberOfLines={12}
+                  style={{ minHeight: 240, textAlignVertical: 'top' }}
+                />
               )}
 
               {isEventType && (
