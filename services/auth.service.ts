@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import { api } from './api';
+import { api, clearAccessToken, setAccessToken } from './api';
 import type {
   AuthResponse,
   ForgotPasswordPayload,
@@ -15,7 +15,7 @@ export const authService = {
   login: async (payload: LoginPayload) => {
     const response = await api.post<AuthResponse>('/auth/login/mobile', payload, false, true);
 
-    await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, response.access_token);
+    setAccessToken(response.access_token);
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, response.refresh_token);
     return response;
   },
@@ -30,6 +30,7 @@ export const authService = {
   getMe: () => api.get<User>('/auth/me'),
 
   logout: async () => {
+    clearAccessToken();
     await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
   },

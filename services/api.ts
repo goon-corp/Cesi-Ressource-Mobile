@@ -5,6 +5,27 @@ const API_KEY = process.env.EXPO_PUBLIC_API_KEY;
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const ACCESS_TOKEN_KEY = 'access_token';
 
+// ─── In-memory token cache ─────────────────────────────────────────────────────
+// Avoids a SecureStore hardware read (50–200ms) on every authenticated request.
+
+let memoryToken: string | null = null;
+
+async function getAccessToken(): Promise<string | null> {
+  if (memoryToken) return memoryToken;
+  const stored = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY).catch(() => null);
+  memoryToken = stored;
+  return stored;
+}
+
+export function setAccessToken(token: string) {
+  memoryToken = token;
+  SecureStore.setItemAsync(ACCESS_TOKEN_KEY, token).catch(() => null);
+}
+
+export function clearAccessToken() {
+  memoryToken = null;
+}
+
 // ─── Error ────────────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -108,15 +129,16 @@ async function refreshAccessToken(): Promise<string> {
       });
 
       if (!response.ok) {
-        await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-        await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+        clearAccessToken();
+        await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY).catch(() => null);
+        await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY).catch(() => null);
         throw new ApiError(response.status, 'Session expirée');
       }
 
       const data = await response.json();
-      await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, data.accessToken);
+      setAccessToken(data.accessToken);
       if (data.refreshToken) {
-        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken);
+        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken).catch(() => null);
       }
 
       return data.accessToken;
@@ -150,10 +172,8 @@ async function request<T>(
   }
 
   if (authenticated) {
-    const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY).catch(() => null);
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
+    const token = await getAccessToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(buildUrl(path, params), {
@@ -228,10 +248,8 @@ async function upload<T>(
   }
 
   if (authenticated) {
-    const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY).catch(() => null);
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
+    const token = await getAccessToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(`${API_URL}${path}`, {

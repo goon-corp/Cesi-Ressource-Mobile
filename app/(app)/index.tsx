@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import type { FlatList as FlatListType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -104,11 +105,11 @@ export default function HomeScreen() {
   const [page, setPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  const listRef = useRef<FlatListType<ApiResource>>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const hasFocused = useRef(false);
+  const hasMounted = useRef(false);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -130,10 +131,8 @@ export default function HomeScreen() {
 
   const allTags = useMemo(() => (Array.isArray(tagsData) ? tagsData : []), [tagsData]);
 
-  const fetchResources = useCallback(async (pageNum: number, reset: boolean) => {
-    if (reset) setIsLoading(true);
-    else setIsLoadingMore(true);
-
+  const fetchResources = useCallback(async (pageNum: number) => {
+    setIsLoading(true);
     try {
       const result = await resourceService.getResources({
         page: pageNum,
@@ -143,39 +142,32 @@ export default function HomeScreen() {
         ...(selectedTagIds.length > 0 ? { RessourceTags: selectedTagIds } : {}),
       });
       const items = Array.isArray(result) ? result : [];
-      if (reset) {
-        setResources(items);
-      } else {
-        setResources((prev) => [...prev, ...items]);
-      }
+      setResources(items);
       setHasNextPage(items.length >= PAGE_SIZE);
       setPage(pageNum);
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
     } catch {
       // silently handled
     } finally {
       setIsLoading(false);
-      setIsLoadingMore(false);
     }
   }, [debouncedSearch, activeFilter, selectedTagIds]);
 
-  // Handles filter/search/tag changes after initial mount
+  // Handles initial load + filter/search/tag changes
   useEffect(() => {
-    if (!hasFocused.current) return;
-    fetchResources(1, true);
+    fetchResources(1);
   }, [fetchResources]);
 
-  // Handles initial load + returning from create/detail
+  // Handles returning from create/detail (skip first mount)
   useFocusEffect(
     useCallback(() => {
-      hasFocused.current = true;
-      fetchResources(1, true);
+      if (!hasMounted.current) {
+        hasMounted.current = true;
+        return;
+      }
+      fetchResources(1);
     }, [fetchResources]),
   );
-
-  const loadMore = useCallback(() => {
-    if (!hasNextPage || isLoadingMore || isLoading) return;
-    fetchResources(page + 1, false);
-  }, [hasNextPage, isLoadingMore, isLoading, page, fetchResources]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: ApiResource; index: number }) => (
@@ -313,34 +305,39 @@ export default function HomeScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
-        <FlatList
-          data={resources}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
-          ListEmptyComponent={<EmptyState />}
-          ListFooterComponent={
-            isLoadingMore ? (
-              <View style={{ paddingVertical: Spacing.lg, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color={colors.primary} />
-              </View>
-            ) : hasNextPage ? (
-              <Pressable
-                style={[styles.loadMoreBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-                onPress={loadMore}
-              >
-                <AppText variant="label" style={{ color: colors.primary }}>Charger plus</AppText>
-                <Ionicons name="chevron-down" size={16} color={colors.primary} style={{ marginLeft: Spacing.xs }} />
-              </Pressable>
-            ) : null
-          }
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.3}
-        />
+        <>
+          <FlatList
+            ref={listRef}
+            data={resources}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+            ListEmptyComponent={<EmptyState />}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          />
+          <View style={[styles.pagination, { borderTopColor: colors.borderLight, backgroundColor: colors.background }]}>
+            <Pressable
+              onPress={() => fetchResources(page - 1)}
+              disabled={page <= 1}
+              style={[styles.pageBtn, page <= 1 && { opacity: 0.35 }]}
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.primary} />
+              <AppText variant="label" style={{ color: colors.primary }}>Précédent</AppText>
+            </Pressable>
+            <AppText variant="label" muted>Page {page}</AppText>
+            <Pressable
+              onPress={() => fetchResources(page + 1)}
+              disabled={!hasNextPage}
+              style={[styles.pageBtn, !hasNextPage && { opacity: 0.35 }]}
+            >
+              <AppText variant="label" style={{ color: colors.primary }}>Suivant</AppText>
+              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+            </Pressable>
+          </View>
+        </>
       )}
     </SafeAreaView>
   );
@@ -402,14 +399,19 @@ const styles = StyleSheet.create({
   addBtn: {
     padding: Spacing.xs,
   },
-  loadMoreBtn: {
+  pagination: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: Spacing.md,
-    marginVertical: Spacing.lg,
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
+    borderTopWidth: 1,
+  },
+  pageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
   },
 });

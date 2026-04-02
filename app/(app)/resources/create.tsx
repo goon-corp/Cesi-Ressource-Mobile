@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { Toast } from 'toastify-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { AppText } from '@/components/ui/AppText';
@@ -445,6 +447,7 @@ interface FormState {
   dateEnd: string;
   location: string;
   eventLink: string;
+  thumbnail: ImagePicker.ImagePickerAsset | null;
 }
 
 interface FormErrors {
@@ -473,6 +476,7 @@ export default function CreateResourceScreen() {
     dateEnd: '',
     location: '',
     eventLink: '',
+    thumbnail: null,
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [localTags, setLocalTags] = useState<TagDto[]>([]);
@@ -508,6 +512,18 @@ export default function CreateResourceScreen() {
     setErrors((prev) => ({ ...prev, [key]: undefined }));
   }, []);
 
+  const pickImage = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (!result.canceled) {
+      setField('thumbnail', result.assets[0]);
+    }
+  }, [setField]);
+
   const validateStep = (): boolean => {
     const next: FormErrors = {};
 
@@ -534,12 +550,12 @@ export default function CreateResourceScreen() {
 
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  const { mutate: createEvent, isLoading: isSubmitting, error: createError } = useMutation(
+  const { mutate: createEvent, isLoading: isSubmitting } = useMutation(
     (payload: CreateEventPayload) => eventService.createEvent(payload),
   );
 
   const handleSubmit = async () => {
-    if (!validateStep()) return;
+    if (isSubmitting || !validateStep()) return;
 
     const statusId = statuses?.[0]?.id ?? '';
     if (!statusId) {
@@ -559,13 +575,14 @@ export default function CreateResourceScreen() {
       dateEnd: form.dateEnd,
       location: form.isVirtual ? (form.location.trim() || 'En ligne') : form.location.trim(),
       eventLink: form.eventLink.trim() || undefined,
+      thumbnail: form.thumbnail ?? undefined,
     });
 
     if (result) {
       Toast.success('Ressource créée avec succès !');
       router.back();
     } else {
-      Toast.error(createError?.message ?? 'Une erreur est survenue lors de la création.');
+      Toast.error('Une erreur est survenue lors de la création.');
     }
   };
 
@@ -575,9 +592,10 @@ export default function CreateResourceScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.borderLight }]}>
         <Pressable
-          onPress={() => (step === 0 ? router.back() : goBack())}
+          onPress={() => { if (isSubmitting) return; step === 0 ? router.back() : goBack(); }}
           style={styles.backBtn}
           hitSlop={8}
+          disabled={isSubmitting}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </Pressable>
@@ -599,6 +617,41 @@ export default function CreateResourceScreen() {
               <AppText variant="h3" style={{ marginBottom: Spacing.lg }}>
                 Informations de base
               </AppText>
+
+              <AppText variant="label" style={{ marginBottom: Spacing.xs }}>
+                Image de couverture
+              </AppText>
+              <Pressable
+                onPress={pickImage}
+                style={[
+                  styles.imagePicker,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                ]}
+              >
+                {form.thumbnail ? (
+                  <>
+                    <Image
+                      source={{ uri: form.thumbnail.uri }}
+                      style={styles.imagePreview}
+                      resizeMode="cover"
+                    />
+                    <View style={[styles.imageOverlay, { backgroundColor: 'rgba(0,0,0,0.35)' }]}>
+                      <Ionicons name="camera-outline" size={22} color="#fff" />
+                      <AppText style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>
+                        Modifier
+                      </AppText>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="image-outline" size={32} color={colors.textLight} />
+                    <AppText variant="caption" muted style={{ marginTop: Spacing.xs }}>
+                      Sélectionner une image
+                    </AppText>
+                  </>
+                )}
+              </Pressable>
+
               <AppTextInput
                 label="Titre"
                 required
@@ -754,6 +807,7 @@ export default function CreateResourceScreen() {
                   label="Précédent"
                   variant="secondary"
                   onPress={goBack}
+                  disabled={isSubmitting}
                   fullWidth
                 />
               </View>
@@ -763,6 +817,7 @@ export default function CreateResourceScreen() {
                   variant="primary"
                   onPress={isLastStep ? handleSubmit : goNext}
                   loading={isLastStep && isSubmitting}
+                  disabled={isSubmitting}
                   fullWidth
                 />
               </View>
@@ -806,5 +861,27 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
     marginBottom: Spacing.md,
+  },
+  imagePicker: {
+    height: 160,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.lg,
+    overflow: 'hidden',
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

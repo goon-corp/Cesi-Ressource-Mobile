@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { ApiEvent } from '@/types/resource.types';
+import type { ImagePickerAsset } from 'expo-image-picker';
 
 export interface CreateEventPayload {
   title: string;
@@ -13,6 +14,7 @@ export interface CreateEventPayload {
   dateEnd: string;
   eventLink?: string;
   location: string;
+  thumbnail?: ImagePickerAsset;
 }
 
 export const eventService = {
@@ -29,6 +31,13 @@ export const eventService = {
     payload.tags.forEach((tagId, i) => {
       formData.append(`RessourceInfos.Tags[${i}]`, tagId);
     });
+    if (payload.thumbnail) {
+      formData.append('RessourceInfos.Thumbnail', {
+        uri: payload.thumbnail.uri,
+        name: payload.thumbnail.fileName ?? 'thumbnail.jpg',
+        type: payload.thumbnail.mimeType ?? 'image/jpeg',
+      } as unknown as Blob);
+    }
     formData.append('IsVirtual', payload.isVirtual.toString());
     formData.append('DateStart', payload.dateStart);
     formData.append('DateEnd', payload.dateEnd);
