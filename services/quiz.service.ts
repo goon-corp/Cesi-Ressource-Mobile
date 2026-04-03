@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { ApiQuiz } from '@/types/resource.types';
+import type { ApiQuiz, ApiQuizzQuestion } from '@/types/resource.types';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 export interface CreateQuizPayload {
@@ -10,6 +10,13 @@ export interface CreateQuizPayload {
   typeId: string;
   tags: string[];
   thumbnail?: ImagePickerAsset;
+}
+
+export interface CreateQuizQuestionPayload {
+  question: string;
+  possibleAnswers: string[];
+  correctAnswer: string;
+  quizzId: string;
 }
 
 export const quizService = {
@@ -31,5 +38,14 @@ export const quizService = {
       } as unknown as Blob);
     }
     return api.upload<ApiQuiz>('POST', '/quizzes', formData, true);
+  },
+
+  createQuizQuestion: (payload: CreateQuizQuestionPayload) => {
+    return api.post<ApiQuizzQuestion>('/quizzes-questions', {
+      question: payload.question,
+      possible_answers: JSON.stringify(payload.possibleAnswers),
+      correct_answer: payload.correctAnswer,
+      quizz_id: payload.quizzId,
+    }, true);
   },
 };

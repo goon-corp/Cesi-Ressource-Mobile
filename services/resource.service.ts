@@ -26,4 +26,10 @@ export const resourceService = {
 
   getStatuses: () =>
     api.get<ResourceStatusInfo[]>('/ressource-statuses', false),
+
+  likeResource: (id: string) =>
+    api.post<void>(`/ressources/${id}/like`, {}, true),
+
+  favoriteResource: (id: string) =>
+    api.post<void>(`/ressources/${id}/favorite`, {}, true),
 };

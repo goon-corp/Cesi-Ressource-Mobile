@@ -1,5 +1,13 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -12,10 +20,86 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { AppButton } from '@/components/ui/AppButton';
+import { ResourceCard, type ResourceCardActionsMode } from '@/components/ui/ResourceCard';
 import { BorderRadius, Shadow, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
+import { userService } from '@/services/user.service';
+import type { ApiResource } from '@/types/resource.types';
 
-// ─── Info Row ─────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 10;
+
+// ─── Tab definition ───────────────────────────────────────────────────────────
+
+type TabKey = 'info' | 'likes' | 'favorites' | 'resources';
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'info', label: 'Mes infos' },
+  { key: 'likes', label: 'Mes likes' },
+  { key: 'favorites', label: 'Mes favoris' },
+  { key: 'resources', label: 'Mes ressources' },
+];
+
+// ─── Tab bar ──────────────────────────────────────────────────────────────────
+
+interface TabBarProps {
+  active: TabKey;
+  onChange: (key: TabKey) => void;
+}
+
+function TabBar({ active, onChange }: TabBarProps) {
+  const { colors } = useTheme();
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={tabStyles.container}
+      bounces={false}
+    >
+      {TABS.map((tab) => {
+        const isActive = tab.key === active;
+        return (
+          <Pressable
+            key={tab.key}
+            onPress={() => onChange(tab.key)}
+            style={[
+              tabStyles.tab,
+              {
+                borderBottomColor: isActive ? colors.primary : 'transparent',
+                borderBottomWidth: 2,
+              },
+            ]}
+          >
+            <AppText
+              variant="label"
+              style={{
+                color: isActive ? colors.primary : colors.textMuted,
+                fontWeight: isActive ? '700' : '500',
+              }}
+            >
+              {tab.label}
+            </AppText>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+const tabStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.md,
+  },
+  tab: {
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    marginRight: Spacing.sm,
+  },
+});
+
+// ─── Info row ─────────────────────────────────────────────────────────────────
+
 interface InfoRowProps {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
@@ -32,12 +116,8 @@ function InfoRow({ icon, label, value, withDivider }: InfoRowProps) {
           <Ionicons name={icon} size={16} color={colors.primary} />
         </View>
         <View style={infoStyles.content}>
-          <AppText variant="caption" muted>
-            {label}
-          </AppText>
-          <AppText variant="body" style={{ color: colors.text }}>
-            {value}
-          </AppText>
+          <AppText variant="caption" muted>{label}</AppText>
+          <AppText variant="body" style={{ color: colors.text }}>{value}</AppText>
         </View>
       </View>
       {withDivider && <View style={[infoStyles.divider, { backgroundColor: colors.borderLight }]} />}
@@ -59,34 +139,23 @@ const infoStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: {
-    flex: 1,
-    gap: 2,
-  },
+  content: { flex: 1, gap: 2 },
   divider: {
     height: 1,
     marginLeft: 36 + Spacing.md,
   },
 });
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-interface StatCardProps {
-  value: string | number;
-  label: string;
-}
+// ─── Stat card ────────────────────────────────────────────────────────────────
 
-function StatCard({ value, label }: StatCardProps) {
+function StatCard({ value, label }: { value: number; label: string }) {
   const { colors } = useTheme();
   return (
     <View style={[statStyles.card, { backgroundColor: colors.surface, ...Shadow.sm }]}>
-      <AppText
-        style={{ color: colors.primary, fontSize: FontSize.xl, fontWeight: '700' }}
-      >
+      <AppText style={{ color: colors.primary, fontSize: FontSize.xl, fontWeight: '700' }}>
         {value}
       </AppText>
-      <AppText variant="caption" muted center style={{ marginTop: 2 }}>
-        {label}
-      </AppText>
+      <AppText variant="caption" muted center style={{ marginTop: 2 }}>{label}</AppText>
     </View>
   );
 }
@@ -100,14 +169,148 @@ const statStyles = StyleSheet.create({
   },
 });
 
+// ─── Resource list tab ────────────────────────────────────────────────────────
+
+type FetchFn = (userId: string, page: number, size: number) => Promise<ApiResource[]>;
+
+interface ResourceListTabProps {
+  userId: string;
+  fetchFn: FetchFn;
+  emptyLabel: string;
+  actionsMode?: ResourceCardActionsMode;
+}
+
+function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default' }: ResourceListTabProps) {
+  const { colors } = useTheme();
+
+  const [items, setItems] = useState<ApiResource[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const load = useCallback(async (p: number) => {
+    setIsLoading(true);
+    try {
+      const data = await fetchFn(userId, p, PAGE_SIZE);
+      const list = Array.isArray(data) ? data : [];
+      setItems(list);
+      setHasNext(list.length >= PAGE_SIZE);
+      setPage(p);
+    } catch {
+      setItems([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userId, fetchFn]);
+
+  useEffect(() => { load(1); }, [load]);
+
+  if (isLoading) {
+    return (
+      <View style={listTabStyles.centered}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <View style={listTabStyles.centered}>
+        <Ionicons name="file-tray-outline" size={48} color={colors.textLight} />
+        <AppText variant="body" muted center style={{ marginTop: Spacing.md }}>
+          {emptyLabel}
+        </AppText>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item, index }) => (
+          <ResourceCard
+            resource={item}
+            index={index}
+            actionsMode={actionsMode}
+            onPress={() =>
+              router.push({
+                pathname: '/(app)/resources/[id]',
+                params: {
+                  id: item.id,
+                  resourceType: item.type?.label ?? '',
+                  resourceData: JSON.stringify(item),
+                },
+              })
+            }
+          />
+        )}
+        ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+        contentContainerStyle={listTabStyles.list}
+        showsVerticalScrollIndicator={false}
+      />
+      <View style={[listTabStyles.pagination, { borderTopColor: colors.borderLight, backgroundColor: colors.background }]}>
+        <Pressable
+          onPress={() => load(page - 1)}
+          disabled={page <= 1}
+          style={[listTabStyles.pageBtn, page <= 1 && { opacity: 0.35 }]}
+        >
+          <Ionicons name="chevron-back" size={18} color={colors.primary} />
+          <AppText variant="label" style={{ color: colors.primary }}>Précédent</AppText>
+        </Pressable>
+        <AppText variant="label" muted>Page {page}</AppText>
+        <Pressable
+          onPress={() => load(page + 1)}
+          disabled={!hasNext}
+          style={[listTabStyles.pageBtn, !hasNext && { opacity: 0.35 }]}
+        >
+          <AppText variant="label" style={{ color: colors.primary }}>Suivant</AppText>
+          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const listTabStyles = StyleSheet.create({
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.lg,
+  },
+  list: {
+    padding: Spacing.md,
+    paddingBottom: Spacing.xl,
+  },
+  pagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderTopWidth: 1,
+  },
+  pageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+  },
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function ProfileScreen() {
   const { isLoading, logout } = useAuth();
   const { user } = useUser();
   const { colors } = useTheme();
   const { openDrawer } = useDrawer();
 
-  // Entrance animation
+  const [activeTab, setActiveTab] = useState<TabKey>('info');
+
   const headerAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
 
@@ -116,9 +319,6 @@ export default function ProfileScreen() {
       router.replace('/(auth)/login');
       return;
     }
-
-    
-
     Animated.sequence([
       Animated.timing(headerAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
       Animated.timing(contentAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
@@ -132,119 +332,115 @@ export default function ProfileScreen() {
     Toast.success('Vous avez été déconnecté.');
   };
 
-  const memberSince = new Date(Date.now()).toLocaleDateString('fr-FR', {
-    month: 'long',
-    year: 'numeric',
-  });
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
       <AppHeader title="Mon profil" onMenuPress={openDrawer} />
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profile hero */}
-        <Animated.View
-          style={[
-            styles.hero,
-            { backgroundColor: colors.primary, opacity: headerAnim },
-          ]}
+      {/* Hero */}
+      <Animated.View
+        style={[styles.hero, { backgroundColor: colors.primary, opacity: headerAnim }]}
+      >
+        <View style={[styles.avatarRing, { borderColor: colors.background }]}>
+          <Avatar
+            name={`${user.first_name} ${user.last_name}`}
+            size={88}
+            backgroundColor="rgba(255,255,255,0.2)"
+            textColor="#FFFFFF"
+          />
+        </View>
+        <AppText
+          style={{ color: colors.textOnPrimary, fontSize: FontSize.xl, fontWeight: '700', marginTop: Spacing.md }}
         >
-          <View style={[styles.avatarRing, { borderColor: colors.background }]}>
-            <Avatar
-              name={`${user.first_name} ${user.last_name}`}
-              size={88}
-              backgroundColor="rgba(255,255,255,0.2)"
-              textColor="#FFFFFF"
-            />
-          </View>
+          {user.first_name} {user.last_name}
+        </AppText>
+        <AppText style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+          @{user.user_name}
+        </AppText>
+      </Animated.View>
 
-          <AppText
-            style={{
-              color: colors.textOnPrimary,
-              fontSize: FontSize.xl,
-              fontWeight: '700',
-              marginTop: Spacing.md,
-            }}
+      <Animated.View
+        style={[
+          styles.statsRow,
+          {
+            opacity: contentAnim,
+            transform: [{
+              translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }),
+            }],
+          },
+        ]}
+      >
+        <StatCard value={user.authored_ressources_count} label="Ressources" />
+        <StatCard value={user.liked_ressources_count} label="Likes" />
+        <StatCard value={user.favorite_ressources_count} label="Favoris" />
+      </Animated.View>
+
+      {/* Tab bar */}
+      <View style={[styles.tabBarWrapper, { borderBottomColor: colors.borderLight, backgroundColor: colors.surface }]}>
+        <TabBar active={activeTab} onChange={setActiveTab} />
+      </View>
+
+      {/* Tab content */}
+      <View style={{ flex: 1 }}>
+        {activeTab === 'info' && (
+          <ScrollView
+            contentContainerStyle={styles.infoContent}
+            showsVerticalScrollIndicator={false}
           >
-            {user.first_name} {user.last_name}
-          </AppText>
-          <AppText style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
-            @{user.user_name}
-          </AppText>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.body,
-            {
-              opacity: contentAnim,
-              transform: [
-                {
-                  translateY: contentAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [16, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          {/* Stats */}
-          <View style={styles.statsRow}>
-            <StatCard value={0} label="Ressources" />
-            <StatCard value={0} label="Favoris" />
-            <StatCard value={0} label="Commentaires" />
-          </View>
-
-          {/* Edit button */}
-          <Pressable
-            onPress={() => router.push('/(app)/edit-profile')}
-            style={({ pressed }) => [
-              styles.editRow,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.borderLight,
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            <Ionicons name="create-outline" size={20} color={colors.primary} />
-            <AppText
-              variant="body"
-              style={{ flex: 1, color: colors.text, marginLeft: Spacing.md }}
+            <Pressable
+              onPress={() => router.push('/(app)/edit-profile')}
+              style={({ pressed }) => [
+                styles.editRow,
+                { backgroundColor: colors.surface, borderColor: colors.borderLight, opacity: pressed ? 0.7 : 1 },
+              ]}
             >
-              Modifier mon profil
-            </AppText>
-            <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
-          </Pressable>
+              <Ionicons name="create-outline" size={20} color={colors.primary} />
+              <AppText variant="body" style={{ flex: 1, color: colors.text, marginLeft: Spacing.md }}>
+                Modifier mon profil
+              </AppText>
+              <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+            </Pressable>
 
-          {/* Info section */}
-          <AppText variant="label" muted style={styles.sectionTitle}>
-            INFORMATIONS
-          </AppText>
-          <View
-            style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}
-          >
-            <InfoRow icon="mail-outline" label="Adresse email" value={user.email} withDivider />
-            <InfoRow
-              icon="at-outline"
-              label="Nom d'utilisateur"
-              value={`@${user.user_name}`}
-              withDivider
-            />
-            <InfoRow
-              icon="calendar-outline"
-              label="Membre depuis"
-              value={memberSince}
-            />
-          </View>
+            <AppText variant="label" muted style={styles.sectionTitle}>INFORMATIONS</AppText>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+              <InfoRow icon="mail-outline" label="Adresse email" value={user.email} withDivider />
+              <InfoRow icon="at-outline" label="Nom d'utilisateur" value={`@${user.user_name}`} withDivider />
+              <InfoRow icon="person-outline" label="Prénom" value={user.first_name} withDivider />
+              <InfoRow icon="person-outline" label="Nom" value={user.last_name} />
+            </View>
 
-          {/* Logout */}
-          <View style={{ marginTop: Spacing.lg }}>
-            <AppButton label="Se déconnecter" onPress={handleLogout} variant="danger" />
-          </View>
-        </Animated.View>
-      </ScrollView>
+            <View style={{ marginTop: Spacing.lg }}>
+              <AppButton label="Se déconnecter" onPress={handleLogout} variant="danger" />
+            </View>
+          </ScrollView>
+        )}
+
+        {activeTab === 'likes' && (
+          <ResourceListTab
+            userId={user.id}
+            fetchFn={userService.getLikedResources}
+            emptyLabel="Vous n'avez encore liké aucune ressource."
+            actionsMode="liked"
+          />
+        )}
+
+        {activeTab === 'favorites' && (
+          <ResourceListTab
+            userId={user.id}
+            fetchFn={userService.getFavResources}
+            emptyLabel="Vous n'avez encore mis aucune ressource en favori."
+            actionsMode="favorited"
+          />
+        )}
+
+        {activeTab === 'resources' && (
+          <ResourceListTab
+            userId={user.id}
+            fetchFn={userService.getAuthoredResources}
+            emptyLabel="Vous n'avez encore publié aucune ressource."
+            actionsMode="default"
+          />
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -253,7 +449,7 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: 'center',
     paddingTop: Spacing.xl,
-    paddingBottom: Spacing['2xl'],
+    paddingBottom: Spacing.xl,
     paddingHorizontal: Spacing.lg,
   },
   avatarRing: {
@@ -261,15 +457,18 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     padding: 3,
   },
-  body: {
-    padding: Spacing.md,
-    paddingBottom: Spacing.xl,
-    marginTop: -Spacing.lg,
-  },
   statsRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  tabBarWrapper: {
+    borderBottomWidth: 1,
+  },
+  infoContent: {
+    padding: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
   editRow: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { ApiPoll } from '@/types/resource.types';
+import type { ApiPoll, ApiPollOption } from '@/types/resource.types';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 export interface CreatePollPayload {
@@ -10,6 +10,11 @@ export interface CreatePollPayload {
   typeId: string;
   tags: string[];
   thumbnail?: ImagePickerAsset;
+}
+
+export interface CreatePollOptionPayload {
+  option: string;
+  pollId: string;
 }
 
 export const pollService = {
@@ -31,5 +36,12 @@ export const pollService = {
       } as unknown as Blob);
     }
     return api.upload<ApiPoll>('POST', '/polls', formData, true);
+  },
+
+  createPollOption: (payload: CreatePollOptionPayload) => {
+    return api.post<ApiPollOption>('/PollOption', {
+      option: payload.option,
+      pollId: payload.pollId,
+    }, true);
   },
 };

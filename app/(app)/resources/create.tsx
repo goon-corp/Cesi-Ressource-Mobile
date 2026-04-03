@@ -35,6 +35,41 @@ import { quizService, type CreateQuizPayload } from '@/services/quiz.service';
 import { pollService, type CreatePollPayload } from '@/services/poll.service';
 import type { TagDto } from '@/types/resource.types';
 
+// ─── Quiz builder types ───────────────────────────────────────────────────────
+
+interface QuizAnswer {
+  id: string;
+  text: string;
+}
+
+interface QuizQuestion {
+  id: string;
+  question: string;
+  answers: QuizAnswer[];
+  correctAnswerId: string;
+}
+
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 9);
+}
+
+function makeDefaultQuestion(): QuizQuestion {
+  const a1 = { id: generateId(), text: '' };
+  const a2 = { id: generateId(), text: '' };
+  return { id: generateId(), question: '', answers: [a1, a2], correctAnswerId: a1.id };
+}
+
+// ─── Poll builder types ───────────────────────────────────────────────────────
+
+interface PollOption {
+  id: string;
+  text: string;
+}
+
+function makeDefaultOptions(): PollOption[] {
+  return [{ id: generateId(), text: '' }, { id: generateId(), text: '' }];
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function normalizeLabel(label: string): string {
@@ -450,6 +485,489 @@ const tagStyles = StyleSheet.create({
   },
 });
 
+// ─── Quiz Question Card ───────────────────────────────────────────────────────
+
+interface QuizQuestionCardProps {
+  question: QuizQuestion;
+  index: number;
+  hasError: boolean;
+  onUpdate: (q: QuizQuestion) => void;
+  onDelete: () => void;
+}
+
+function QuizQuestionCard({ question, index, hasError, onUpdate, onDelete }: QuizQuestionCardProps) {
+  const { colors } = useTheme();
+
+  const updateQuestionText = (text: string) =>
+    onUpdate({ ...question, question: text });
+
+  const addAnswer = () => {
+    if (question.answers.length >= 6) return;
+    onUpdate({ ...question, answers: [...question.answers, { id: generateId(), text: '' }] });
+  };
+
+  const updateAnswer = (id: string, text: string) =>
+    onUpdate({ ...question, answers: question.answers.map((a) => (a.id === id ? { ...a, text } : a)) });
+
+  const deleteAnswer = (id: string) => {
+    const next = question.answers.filter((a) => a.id !== id);
+    onUpdate({
+      ...question,
+      answers: next,
+      correctAnswerId: question.correctAnswerId === id ? (next[0]?.id ?? '') : question.correctAnswerId,
+    });
+  };
+
+  const selectCorrect = (id: string) => onUpdate({ ...question, correctAnswerId: id });
+
+  return (
+    <View
+      style={[
+        quizStyles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: hasError ? colors.error : colors.border,
+          ...quizStyles.cardShadow,
+        },
+      ]}
+    >
+      {/* Card header */}
+      <View style={[quizStyles.cardHeader, { borderBottomColor: colors.borderLight }]}>
+        <View style={[quizStyles.indexBadge, { backgroundColor: colors.primaryLight }]}>
+          <AppText style={{ color: colors.primary, fontSize: FontSize.xs, fontWeight: '700' }}>
+            {index + 1}
+          </AppText>
+        </View>
+        <AppText variant="label" style={{ flex: 1, marginLeft: Spacing.sm, color: colors.text }}>
+          Question {index + 1}
+        </AppText>
+        <Pressable onPress={onDelete} hitSlop={10} style={quizStyles.deleteBtn}>
+          <Ionicons name="trash-outline" size={17} color={colors.error} />
+        </Pressable>
+      </View>
+
+      <View style={quizStyles.cardBody}>
+        {/* Question text */}
+        <AppTextInput
+          label="Énoncé"
+          placeholder="Ex : Quelle est la capitale de la France ?"
+          value={question.question}
+          onChangeText={updateQuestionText}
+          multiline
+          numberOfLines={2}
+          style={{ minHeight: 64, textAlignVertical: 'top' }}
+        />
+
+        {/* Answers */}
+        <AppText variant="label" style={{ marginBottom: Spacing.sm }}>
+          Réponses{' '}
+          <AppText variant="caption" muted>
+            — appuyez pour marquer la bonne réponse
+          </AppText>
+        </AppText>
+
+        {question.answers.map((answer, i) => {
+          const isCorrect = answer.id === question.correctAnswerId;
+          return (
+            <Pressable
+              key={answer.id}
+              onPress={() => selectCorrect(answer.id)}
+              style={[
+                quizStyles.answerRow,
+                {
+                  borderColor: isCorrect ? colors.primary : colors.border,
+                  backgroundColor: isCorrect ? colors.primaryLight : colors.inputBackground,
+                },
+              ]}
+            >
+              <View style={[quizStyles.radioOuter, { borderColor: isCorrect ? colors.primary : colors.border }]}>
+                {isCorrect && <View style={[quizStyles.radioInner, { backgroundColor: colors.primary }]} />}
+              </View>
+
+              <TextInput
+                style={[quizStyles.answerInput, { color: colors.text, flex: 1 }]}
+                placeholder={`Réponse ${i + 1}…`}
+                placeholderTextColor={colors.placeholder}
+                value={answer.text}
+                onChangeText={(t) => updateAnswer(answer.id, t)}
+                onFocus={() => selectCorrect(answer.id)}
+              />
+
+              {question.answers.length > 2 && (
+                <Pressable
+                  onPress={() => deleteAnswer(answer.id)}
+                  hitSlop={8}
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons name="close-circle" size={18} color={isCorrect ? colors.primary : colors.textMuted} />
+                </Pressable>
+              )}
+            </Pressable>
+          );
+        })}
+
+        {question.answers.length < 6 && (
+          <Pressable
+            style={[quizStyles.addAnswerBtn, { borderColor: colors.primary }]}
+            onPress={addAnswer}
+          >
+            <Ionicons name="add" size={16} color={colors.primary} />
+            <AppText variant="caption" style={{ color: colors.primary, marginLeft: 4 }}>
+              Ajouter une réponse
+            </AppText>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ─── Quiz Questions Builder ────────────────────────────────────────────────────
+
+interface QuizQuestionsBuilderProps {
+  questions: QuizQuestion[];
+  onChange: (questions: QuizQuestion[]) => void;
+  error?: string;
+}
+
+function QuizQuestionsBuilder({ questions, onChange, error }: QuizQuestionsBuilderProps) {
+  const { colors } = useTheme();
+
+  const updateQuestion = (index: number, q: QuizQuestion) => {
+    const next = [...questions];
+    next[index] = q;
+    onChange(next);
+  };
+
+  const deleteQuestion = (index: number) => {
+    if (questions.length <= 1) return;
+    onChange(questions.filter((_, i) => i !== index));
+  };
+
+  const addQuestion = () => onChange([...questions, makeDefaultQuestion()]);
+
+  const firstErrorIndex = error
+    ? questions.findIndex(
+        (q) =>
+          !q.question.trim() ||
+          q.answers.filter((a) => a.text.trim()).length < 2 ||
+          !q.answers.find((a) => a.id === q.correctAnswerId && a.text.trim()),
+      )
+    : -1;
+
+  return (
+    <View>
+      {/* Section header */}
+      <View style={quizStyles.builderHeader}>
+        <AppText variant="h3">Questions du quiz</AppText>
+        <View style={[quizStyles.countBadge, { backgroundColor: colors.primary }]}>
+          <AppText style={{ color: colors.textOnPrimary, fontSize: FontSize.xs, fontWeight: '700' }}>
+            {questions.length}
+          </AppText>
+        </View>
+      </View>
+
+      <AppText variant="caption" muted style={{ marginBottom: Spacing.lg }}>
+        Ajoutez au moins 1 question avec 2 réponses possibles.
+      </AppText>
+
+      {error && (
+        <View style={[quizStyles.errorBanner, { backgroundColor: colors.errorLight ?? '#FFF0F0', borderColor: colors.error }]}>
+          <Ionicons name="alert-circle-outline" size={16} color={colors.error} />
+          <AppText variant="caption" style={{ color: colors.error, marginLeft: 6, flex: 1 }}>{error}</AppText>
+        </View>
+      )}
+
+      {questions.map((q, i) => (
+        <QuizQuestionCard
+          key={q.id}
+          question={q}
+          index={i}
+          hasError={!!error && i === firstErrorIndex}
+          onUpdate={(updated) => updateQuestion(i, updated)}
+          onDelete={() => deleteQuestion(i)}
+        />
+      ))}
+
+      <Pressable
+        style={[quizStyles.addQuestionBtn, { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
+        onPress={addQuestion}
+      >
+        <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+        <AppText variant="body" style={{ color: colors.primary, marginLeft: Spacing.sm, fontWeight: '600' }}>
+          Ajouter une question
+        </AppText>
+      </Pressable>
+    </View>
+  );
+}
+
+const quizStyles = StyleSheet.create({
+  card: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    marginBottom: Spacing.md,
+    overflow: 'hidden',
+  },
+  cardShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    borderBottomWidth: 1,
+  },
+  indexBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtn: {
+    padding: Spacing.xs,
+  },
+  cardBody: {
+    padding: Spacing.md,
+  },
+  answerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs + 2,
+    marginBottom: Spacing.xs,
+    minHeight: 44,
+    gap: Spacing.sm,
+  },
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  answerInput: {
+    fontSize: FontSize.base,
+    paddingVertical: 2,
+  },
+  addAnswerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: BorderRadius.sm,
+    paddingVertical: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  builderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  countBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  addQuestionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+});
+
+// ─── Poll Options Builder ─────────────────────────────────────────────────────
+
+interface PollOptionsBuilderProps {
+  options: PollOption[];
+  onChange: (options: PollOption[]) => void;
+  error?: string;
+}
+
+function PollOptionsBuilder({ options, onChange, error }: PollOptionsBuilderProps) {
+  const { colors } = useTheme();
+
+  const updateOption = (id: string, text: string) =>
+    onChange(options.map((o) => (o.id === id ? { ...o, text } : o)));
+
+  const deleteOption = (id: string) => {
+    if (options.length <= 2) return;
+    onChange(options.filter((o) => o.id !== id));
+  };
+
+  const addOption = () => {
+    if (options.length >= 10) return;
+    onChange([...options, { id: generateId(), text: '' }]);
+  };
+
+  return (
+    <View>
+      <View style={pollStyles.header}>
+        <AppText variant="h3">Options du sondage</AppText>
+        <View style={[pollStyles.countBadge, { backgroundColor: colors.primary }]}>
+          <AppText style={{ color: colors.textOnPrimary, fontSize: FontSize.xs, fontWeight: '700' }}>
+            {options.length}
+          </AppText>
+        </View>
+      </View>
+
+      <AppText variant="caption" muted style={{ marginBottom: Spacing.lg }}>
+        Proposez entre 2 et 10 choix aux participants.
+      </AppText>
+
+      {error && (
+        <View style={[pollStyles.errorBanner, { backgroundColor: colors.errorLight ?? '#FFF0F0', borderColor: colors.error }]}>
+          <Ionicons name="alert-circle-outline" size={16} color={colors.error} />
+          <AppText variant="caption" style={{ color: colors.error, marginLeft: 6, flex: 1 }}>{error}</AppText>
+        </View>
+      )}
+
+      <View style={[pollStyles.optionsCard, { backgroundColor: colors.surface, borderColor: error ? colors.error : colors.border }]}>
+        {options.map((option, i) => (
+          <View
+            key={option.id}
+            style={[
+              pollStyles.optionRow,
+              i < options.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+            ]}
+          >
+            <View style={[pollStyles.optionIndex, { backgroundColor: colors.primaryLight }]}>
+              <AppText style={{ color: colors.primary, fontSize: FontSize.xs, fontWeight: '700' }}>
+                {i + 1}
+              </AppText>
+            </View>
+
+            <TextInput
+              style={[pollStyles.optionInput, { color: colors.text, flex: 1 }]}
+              placeholder={`Option ${i + 1}…`}
+              placeholderTextColor={colors.placeholder}
+              value={option.text}
+              onChangeText={(t) => updateOption(option.id, t)}
+            />
+
+            {options.length > 2 && (
+              <Pressable onPress={() => deleteOption(option.id)} hitSlop={10} style={{ padding: 4 }}>
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </Pressable>
+            )}
+          </View>
+        ))}
+      </View>
+
+      {options.length < 10 && (
+        <Pressable
+          style={[pollStyles.addOptionBtn, { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
+          onPress={addOption}
+        >
+          <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+          <AppText variant="body" style={{ color: colors.primary, marginLeft: Spacing.sm, fontWeight: '600' }}>
+            Ajouter une option
+          </AppText>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const pollStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  countBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  optionsCard: {
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+    marginBottom: Spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    gap: Spacing.sm,
+    minHeight: 52,
+  },
+  optionIndex: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  optionInput: {
+    fontSize: FontSize.base,
+    paddingVertical: 2,
+  },
+  addOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+});
+
 // ─── Form State ───────────────────────────────────────────────────────────────
 
 interface FormState {
@@ -465,6 +983,8 @@ interface FormState {
   eventLink: string;
   content: string;
   thumbnail: ImagePicker.ImagePickerAsset | null;
+  quizQuestions: QuizQuestion[];
+  pollOptions: PollOption[];
 }
 
 interface FormErrors {
@@ -476,6 +996,8 @@ interface FormErrors {
   dateEnd?: string;
   location?: string;
   content?: string;
+  quizQuestions?: string;
+  pollOptions?: string;
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -483,7 +1005,7 @@ interface FormErrors {
 export default function CreateResourceScreen() {
   const { colors } = useTheme();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState<FormState>({
+  const [form, setForm] = useState<FormState>(() => ({
     title: '',
     description: '',
     typeId: '',
@@ -496,7 +1018,9 @@ export default function CreateResourceScreen() {
     eventLink: '',
     content: '',
     thumbnail: null,
-  });
+    quizQuestions: [makeDefaultQuestion()],
+    pollOptions: makeDefaultOptions(),
+  }));
   const [errors, setErrors] = useState<FormErrors>({});
   const [localTags, setLocalTags] = useState<TagDto[]>([]);
 
@@ -562,6 +1086,30 @@ export default function CreateResourceScreen() {
       if (!form.isVirtual && !form.location.trim()) next.location = 'Le lieu est requis.';
     } else if (step === 2 && isArticleType) {
       if (!form.content.trim()) next.content = 'Le contenu est requis.';
+    } else if (step === 2 && isQuizType) {
+      if (form.quizQuestions.length === 0) {
+        next.quizQuestions = 'Ajoutez au moins une question.';
+      } else {
+        for (const q of form.quizQuestions) {
+          if (!q.question.trim()) {
+            next.quizQuestions = 'Chaque question doit avoir un énoncé.';
+            break;
+          }
+          if (q.answers.filter((a) => a.text.trim()).length < 2) {
+            next.quizQuestions = 'Chaque question doit avoir au moins 2 réponses remplies.';
+            break;
+          }
+          if (!q.answers.find((a) => a.id === q.correctAnswerId && a.text.trim())) {
+            next.quizQuestions = 'Sélectionnez la bonne réponse pour chaque question.';
+            break;
+          }
+        }
+      }
+    } else if (step === 2 && isPollType) {
+      const filled = form.pollOptions.filter((o) => o.text.trim());
+      if (filled.length < 2) {
+        next.pollOptions = 'Renseignez au moins 2 options.';
+      }
     }
 
     setErrors(next);
@@ -623,9 +1171,38 @@ export default function CreateResourceScreen() {
     } else if (isArticleType) {
       result = await createArticle({ ...base, content: form.content.trim() });
     } else if (isQuizType) {
-      result = await createQuiz(base);
+      const quizResult = await createQuiz(base);
+      if (quizResult) {
+        try {
+          for (const q of form.quizQuestions) {
+            await quizService.createQuizQuestion({
+              question: q.question.trim(),
+              possibleAnswers: q.answers.map((a) => a.text.trim()),
+              correctAnswer: q.answers.find((a) => a.id === q.correctAnswerId)?.text.trim() ?? '',
+              quizzId: quizResult.id,
+            });
+          }
+          result = quizResult;
+        } catch {
+          Toast.error('Quiz créé, mais certaines questions n\'ont pas pu être enregistrées.');
+          router.back();
+          return;
+        }
+      }
     } else if (isPollType) {
-      result = await createPoll(base);
+      const pollResult = await createPoll(base);
+      if (pollResult) {
+        try {
+          for (const o of form.pollOptions.filter((o) => o.text.trim())) {
+            await pollService.createPollOption({ option: o.text.trim(), pollId: pollResult.id });
+          }
+          result = pollResult;
+        } catch {
+          Toast.error('Sondage créé, mais certaines options n\'ont pas pu être enregistrées.');
+          router.back();
+          return;
+        }
+      }
     }
 
     if (result) {
@@ -768,11 +1345,13 @@ export default function CreateResourceScreen() {
 
           {step === 2 && (
             <View>
-              <AppText variant="h3" style={{ marginBottom: Spacing.xs }}>
-                {isEventType ? "Détails de l'événement" : isArticleType ? "Contenu de l'article" : 'Détails spécifiques'}
-              </AppText>
+              {!isQuizType && !isPollType && (
+                <AppText variant="h3" style={{ marginBottom: Spacing.xs }}>
+                  {isEventType ? "Détails de l'événement" : isArticleType ? "Contenu de l'article" : 'Détails spécifiques'}
+                </AppText>
+              )}
 
-              {!isEventType && !isArticleType && (
+              {!isEventType && !isArticleType && !isQuizType && !isPollType && (
                 <AppText variant="body" muted style={{ marginTop: Spacing.sm }}>
                   Aucun champ supplémentaire requis pour ce type de ressource.
                 </AppText>
@@ -789,6 +1368,22 @@ export default function CreateResourceScreen() {
                   multiline
                   numberOfLines={12}
                   style={{ minHeight: 240, textAlignVertical: 'top' }}
+                />
+              )}
+
+              {isQuizType && (
+                <QuizQuestionsBuilder
+                  questions={form.quizQuestions}
+                  onChange={(qs) => setField('quizQuestions', qs)}
+                  error={errors.quizQuestions}
+                />
+              )}
+
+              {isPollType && (
+                <PollOptionsBuilder
+                  options={form.pollOptions}
+                  onChange={(opts) => setField('pollOptions', opts)}
+                  error={errors.pollOptions}
                 />
               )}
 

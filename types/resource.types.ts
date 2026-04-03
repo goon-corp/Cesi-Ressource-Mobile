@@ -56,3 +56,26 @@ export interface ApiPoll {
   vote_count: number;
   ressource_id: string;
 }
+
+export interface ApiQuizzQuestion {
+  id: string;
+  question: string;
+  possible_answers: string;
+  correct_answer: string;
+  quizz_id: string;
+  creation_time: string;
+}
+
+export interface ApiPollOption {
+  id: string;
+  option: string;
+  poll_id: string;
+  creation_time: string;
+}
+
+export interface ApiRessourceProgression {
+  ressource_id: string;
+  user_id: string;
+  is_aside: boolean;
+  is_exploited: boolean;
+}

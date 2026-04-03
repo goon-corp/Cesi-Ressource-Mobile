@@ -1,10 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { userService } from '@/services/user.service';
-import { UpdateUserPayload, UserInfos } from '@/types/user.types';
+import type { UserProfileDto, UpdateUserPayload } from '@/types/user.types';
 import { useAuth } from './AuthContext';
 
 interface UserContextType {
-  user: UserInfos | null;
+  user: UserProfileDto | null;
   isLoadingUser: boolean;
   fetchUser: (userId: string) => Promise<void>;
   refetchUser: () => Promise<void>;
@@ -15,7 +15,7 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const { userId } = useAuth();
-  const [user, setUser] = useState<UserInfos | null>(null);
+  const [user, setUser] = useState<UserProfileDto | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
 
   const fetchUser = useCallback(async (id: string) => {

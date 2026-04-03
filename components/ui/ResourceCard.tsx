@@ -1,7 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, StyleSheet, View } from 'react-native';
+import { Toast } from 'toastify-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/contexts/AuthContext';
+import { resourceService } from '@/services/resource.service';
 import { AppText } from './AppText';
 import { BorderRadius, Shadow, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
@@ -20,18 +23,30 @@ const TYPE_COLORS: Record<string, string> = {
   Event: '#B34000',
 };
 
+// 'default'   → boutons J'aime + Favoris (états initialement false)
+// 'liked'     → uniquement "Retirer des likes" (pré-liké)
+// 'favorited' → uniquement "Retirer des favoris" (pré-favori)
+export type ResourceCardActionsMode = 'default' | 'liked' | 'favorited';
+
 interface ResourceCardProps {
   resource: ApiResource;
   index: number;
   onPress?: () => void;
+  actionsMode?: ResourceCardActionsMode;
 }
 
-export function ResourceCard({ resource, index, onPress }: ResourceCardProps) {
+export function ResourceCard({ resource, index, onPress, actionsMode = 'default' }: ResourceCardProps) {
   const { colors } = useTheme();
+  const { isAuthenticated } = useAuth();
 
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(28)).current;
   const scale = useRef(new Animated.Value(1)).current;
+
+  const [liked, setLiked] = useState(actionsMode === 'liked');
+  const [favorited, setFavorited] = useState(actionsMode === 'favorited');
+  const [likePending, setLikePending] = useState(false);
+  const [favPending, setFavPending] = useState(false);
 
   useEffect(() => {
     const delay = Math.min(index * 70, 420);
@@ -48,11 +63,105 @@ export function ResourceCard({ resource, index, onPress }: ResourceCardProps) {
   const onPressOut = () =>
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 25 }).start();
 
+  const handleLike = async () => {
+    if (likePending) return;
+    const next = !liked;
+    setLiked(next);
+    setLikePending(true);
+    try {
+      await resourceService.likeResource(resource.id);
+    } catch {
+      setLiked(!next);
+      Toast.error('Impossible de mettre à jour le like.');
+    } finally {
+      setLikePending(false);
+    }
+  };
+
+  const handleFavorite = async () => {
+    if (favPending) return;
+    const next = !favorited;
+    setFavorited(next);
+    setFavPending(true);
+    try {
+      await resourceService.favoriteResource(resource.id);
+    } catch {
+      setFavorited(!next);
+      Toast.error('Impossible de mettre à jour le favori.');
+    } finally {
+      setFavPending(false);
+    }
+  };
+
   const typeLabel = resource.type?.label ?? '';
   const typeColor = TYPE_COLORS[typeLabel] ?? colors.primary;
   const thumbnailUri = resource.thumbnail_id
     ? `${API_URL}/ressource-medias/${resource.thumbnail_id}`
     : null;
+
+  const renderActions = () => {
+    if (!isAuthenticated) return null;
+
+    if (actionsMode === 'liked') {
+      return (
+        <View style={[styles.actionBar, { borderTopColor: colors.borderLight }]}>
+          <Pressable style={styles.actionBtn} onPress={handleLike} disabled={likePending}>
+            <Ionicons
+              name={liked ? 'heart' : 'heart-outline'}
+              size={20}
+              color={liked ? colors.error : colors.textMuted}
+            />
+            <AppText variant="caption" style={{ marginLeft: 5, color: liked ? colors.error : colors.textMuted }}>
+              {liked ? 'Retiré des likes' : 'Retirer des likes'}
+            </AppText>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (actionsMode === 'favorited') {
+      return (
+        <View style={[styles.actionBar, { borderTopColor: colors.borderLight }]}>
+          <Pressable style={styles.actionBtn} onPress={handleFavorite} disabled={favPending}>
+            <Ionicons
+              name={favorited ? 'bookmark' : 'bookmark-outline'}
+              size={20}
+              color={favorited ? '#B34000' : colors.textMuted}
+            />
+            <AppText variant="caption" style={{ marginLeft: 5, color: favorited ? '#B34000' : colors.textMuted }}>
+              {favorited ? 'Retirer des favoris' : 'Retiré des favoris'}
+            </AppText>
+          </Pressable>
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.actionBar, { borderTopColor: colors.borderLight }]}>
+        <Pressable style={styles.actionBtn} onPress={handleLike} disabled={likePending}>
+          <Ionicons
+            name={liked ? 'heart' : 'heart-outline'}
+            size={20}
+            color={liked ? colors.error : colors.textMuted}
+          />
+          <AppText variant="caption" style={{ marginLeft: 5, color: liked ? colors.error : colors.textMuted }}>
+            J'aime
+          </AppText>
+        </Pressable>
+        <View style={[styles.actionDivider, { backgroundColor: colors.borderLight }]} />
+        <Pressable style={styles.actionBtn} onPress={handleFavorite} disabled={favPending}>
+          <Ionicons
+            name={favorited ? 'bookmark' : 'bookmark-outline'}
+            size={20}
+            color={favorited ? '#B34000' : colors.textMuted}
+          />
+          <AppText variant="caption" style={{ marginLeft: 5, color: favorited ? '#B34000' : colors.textMuted }}>
+            Favoris
+          </AppText>
+        </Pressable>
+      </View>
+    );
+  };
 
   return (
     <Animated.View
@@ -67,7 +176,7 @@ export function ResourceCard({ resource, index, onPress }: ResourceCardProps) {
       ]}
     >
       <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
-        <View>
+        <View style={styles.imageWrapper}>
           {thumbnailUri ? (
             <Image source={{ uri: thumbnailUri }} style={styles.image} resizeMode="cover" />
           ) : (
@@ -106,6 +215,8 @@ export function ResourceCard({ resource, index, onPress }: ResourceCardProps) {
           )}
         </View>
       </Pressable>
+
+      {renderActions()}
     </Animated.View>
   );
 }
@@ -113,6 +224,9 @@ export function ResourceCard({ resource, index, onPress }: ResourceCardProps) {
 const styles = StyleSheet.create({
   container: {
     borderRadius: BorderRadius.md,
+    overflow: 'hidden',
+  },
+  imageWrapper: {
     overflow: 'hidden',
   },
   image: {
@@ -146,5 +260,21 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.sm + 2,
+    gap: 2,
+  },
+  actionDivider: {
+    width: 1,
+    marginVertical: Spacing.xs,
   },
 });

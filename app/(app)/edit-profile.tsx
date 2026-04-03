@@ -96,7 +96,6 @@ export default function EditProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Avatar */}
           <View style={styles.avatarWrapper}>
             <View style={[styles.avatarRing, { borderColor: colors.primary }]}>
               <Avatar
@@ -111,7 +110,6 @@ export default function EditProfileScreen() {
             </AppText>
           </View>
 
-          {/* Form */}
           <View style={[styles.card, { backgroundColor: colors.surface }]}>
             <AppText variant="label" muted style={styles.sectionTitle}>
               INFORMATIONS PERSONNELLES
@@ -156,7 +154,6 @@ export default function EditProfileScreen() {
             />
           </View>
 
-          {/* Actions */}
           <View style={styles.actions}>
             <AppButton
               label="Enregistrer les modifications"

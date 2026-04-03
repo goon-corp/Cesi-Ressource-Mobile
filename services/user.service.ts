@@ -1,14 +1,22 @@
-import { UpdateUserPayload, UserInfos } from '@/types/user.types';
+import type { UserProfileDto, UpdateUserPayload } from '@/types/user.types';
+import type { ApiResource } from '@/types/resource.types';
 import { api } from './api';
 
-export const userService = {
-  getUserProfile: async (userId: string) => {
-    const response = await api.get<UserInfos>(`/user/profile/${userId}`);
-    return response;
-  },
+const PAGE_SIZE = 10;
 
-  updateUserProfile: async (userId: string, payload: UpdateUserPayload) => {
-    const response = await api.patch<UserInfos>(`/user/profile/${userId}`, payload);
-    return response;
-  },
+export const userService = {
+  getUserProfile: (userId: string) =>
+    api.get<UserProfileDto>(`/user/${userId}/profile`),
+
+  updateUserProfile: (userId: string, payload: UpdateUserPayload) =>
+    api.patch<UserProfileDto>(`/user/profile/${userId}`, payload),
+
+  getLikedResources: (userId: string, page = 1, size = PAGE_SIZE) =>
+    api.get<ApiResource[]>(`/user/${userId}/liked-ressources`, true, { page, size }),
+
+  getFavResources: (userId: string, page = 1, size = PAGE_SIZE) =>
+    api.get<ApiResource[]>(`/user/${userId}/fav-ressources`, true, { page, size }),
+
+  getAuthoredResources: (userId: string, page = 1, size = PAGE_SIZE) =>
+    api.get<ApiResource[]>(`/user/${userId}/authored-ressources`, true, { page, size }),
 };
