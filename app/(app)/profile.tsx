@@ -653,13 +653,13 @@ export default function ProfileScreen() {
         <View style={[styles.avatarRing, { borderColor: colors.background }]}>
           <Avatar
             name={`${user.first_name} ${user.last_name}`}
-            size={88}
+            size={68}
             backgroundColor="rgba(255,255,255,0.2)"
             textColor="#FFFFFF"
           />
         </View>
         <AppText
-          style={{ color: colors.textOnPrimary, fontSize: FontSize.xl, fontWeight: '700', marginTop: Spacing.md }}
+          style={{ color: colors.textOnPrimary, fontSize: FontSize.xl, fontWeight: '700', marginTop: Spacing.sm }}
         >
           {user.first_name} {user.last_name}
         </AppText>
@@ -759,8 +759,8 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   hero: {
     alignItems: 'center',
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
     paddingHorizontal: Spacing.lg,
   },
   avatarRing: {
@@ -772,7 +772,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   tabBarWrapper: {
     borderBottomWidth: 1,
