@@ -32,8 +32,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { key: 'home', label: 'Accueil', icon: 'home-outline', route: '/(app)/' },
-  { key: 'resources', label: 'Ressources', icon: 'book-outline', route: '/(app)/' },
-  { key: 'community', label: 'Communauté', icon: 'people-outline', route: '/(app)/' },
+  { key: 'resources', label: 'Ressources', icon: 'book-outline', route: '/(app)/resources' },
   {
     key: 'profile',
     label: 'Mon profil',
