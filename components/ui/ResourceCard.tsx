@@ -113,7 +113,7 @@ export function ResourceCard({ resource, index, onPress, actionsMode = 'default'
               color={liked ? colors.error : colors.textMuted}
             />
             <AppText variant="caption" style={{ marginLeft: 5, color: liked ? colors.error : colors.textMuted }}>
-              {liked ? 'Retiré des likes' : 'Retirer des likes'}
+              {liked ? 'Retirer des likes' : 'Retiré des likes'}
             </AppText>
           </Pressable>
         </View>
@@ -137,31 +137,7 @@ export function ResourceCard({ resource, index, onPress, actionsMode = 'default'
       );
     }
 
-    return (
-      <View style={[styles.actionBar, { borderTopColor: colors.borderLight }]}>
-        <Pressable style={styles.actionBtn} onPress={handleLike} disabled={likePending}>
-          <Ionicons
-            name={liked ? 'heart' : 'heart-outline'}
-            size={20}
-            color={liked ? colors.error : colors.textMuted}
-          />
-          <AppText variant="caption" style={{ marginLeft: 5, color: liked ? colors.error : colors.textMuted }}>
-            J'aime
-          </AppText>
-        </Pressable>
-        <View style={[styles.actionDivider, { backgroundColor: colors.borderLight }]} />
-        <Pressable style={styles.actionBtn} onPress={handleFavorite} disabled={favPending}>
-          <Ionicons
-            name={favorited ? 'bookmark' : 'bookmark-outline'}
-            size={20}
-            color={favorited ? '#B34000' : colors.textMuted}
-          />
-          <AppText variant="caption" style={{ marginLeft: 5, color: favorited ? '#B34000' : colors.textMuted }}>
-            Favoris
-          </AppText>
-        </Pressable>
-      </View>
-    );
+    return null;
   };
 
   return (

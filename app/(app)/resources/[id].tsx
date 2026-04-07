@@ -1306,8 +1306,8 @@ export default function ResourceDetailScreen() {
       await reportService.createReport(id, reportTypeId);
       Toast.success("Signalement envoyé");
       setReportModalVisible(false);
-    } catch {
-      Toast.error("Impossible de signaler la ressource");
+    } catch (err) {
+      Toast.error(err instanceof ApiError ? err.message : "Impossible de signaler la ressource");
     } finally {
       setReportSubmitting(false);
     }

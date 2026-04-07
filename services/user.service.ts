@@ -19,4 +19,10 @@ export const userService = {
 
   getAuthoredResources: (userId: string, page = 1, size = PAGE_SIZE) =>
     api.get<PaginatedListDto<ApiResource>>(`/user/${userId}/authored-ressources`, true, { page, size }),
+
+  getAsideResources: (userId: string, page = 1, size = PAGE_SIZE) =>
+    api.get<PaginatedListDto<ApiResource>>(`/user/${userId}/aside-ressources`, true, { page, size }),
+
+  getExploitedResources: (userId: string, page = 1, size = PAGE_SIZE) =>
+    api.get<PaginatedListDto<ApiResource>>(`/user/${userId}/exploited-ressources`, true, { page, size }),
 };
