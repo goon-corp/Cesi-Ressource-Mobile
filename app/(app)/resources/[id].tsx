@@ -2,24 +2,32 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   View,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Toast } from 'toastify-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppText } from '@/components/ui/AppText';
+import { AppTextInput } from '@/components/ui/AppTextInput';
+import { AppButton } from '@/components/ui/AppButton';
+import { AppDatePicker } from '@/components/ui/AppDatePicker';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { useQuery } from '@/hooks/useQuery';
 import { eventService } from '@/services/event.service';
 import { articleService } from '@/services/article.service';
+import { quizService } from '@/services/quiz.service';
+import { pollService } from '@/services/poll.service';
 import { progressionService } from '@/services/progression.service';
 import { ApiError } from '@/services/api';
-import type { ApiEvent, ApiArticle, ApiResource, ApiRessourceProgression } from '@/types/resource.types';
+import type { ApiEvent, ApiArticle, ApiResource, ApiQuiz, ApiPoll, ApiQuizzQuestion, ApiPollOption } from '@/types/resource.types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +42,16 @@ function isEventLabel(label: string): boolean {
 
 function isArticleLabel(label: string): boolean {
   return normalizeLabel(label).includes('article');
+}
+
+function isQuizLabel(label: string): boolean {
+  const n = normalizeLabel(label);
+  return n.includes('quiz');
+}
+
+function isPollLabel(label: string): boolean {
+  const n = normalizeLabel(label);
+  return n.includes('sondage') || n.includes('poll');
 }
 
 // ─── Type-specific detail components ─────────────────────────────────────────
@@ -106,6 +124,301 @@ function ArticleDetail({ article }: { article: ApiArticle }) {
     </View>
   );
 }
+
+// ─── Quiz detail ──────────────────────────────────────────────────────────────
+
+interface QuizDetailProps {
+  questions: ApiQuizzQuestion[];
+  userId: string;
+}
+
+function QuizDetail({ questions, userId }: QuizDetailProps) {
+  const { colors } = useTheme();
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const parsed = useMemo(() =>
+    questions.map((q) => ({
+      ...q,
+      parsedAnswers: (() => {
+        try { return JSON.parse(q.possible_answers) as string[]; }
+        catch { return [] as string[]; }
+      })(),
+    })),
+  [questions]);
+
+  const allAnswered = parsed.length > 0 && parsed.every((q) => answers[q.id] !== undefined);
+  const score = submitted ? parsed.filter((q) => answers[q.id] === q.correct_answer).length : 0;
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await Promise.all(questions.map((q) => quizService.participateInQuestion(q.id, userId)));
+      setSubmitted(true);
+    } catch {
+      Toast.error('Erreur lors de la participation.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (parsed.length === 0) {
+    return (
+      <View style={[interactiveStyles.empty, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+        <Ionicons name="help-circle-outline" size={32} color={colors.textLight} />
+        <AppText variant="body" muted center style={{ marginTop: Spacing.sm }}>
+          Aucune question disponible.
+        </AppText>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      {parsed.map((q, i) => (
+        <View
+          key={q.id}
+          style={[interactiveStyles.questionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
+          <AppText variant="label" style={{ marginBottom: Spacing.md }}>
+            {i + 1}. {q.question}
+          </AppText>
+          <View style={{ gap: Spacing.sm }}>
+            {q.parsedAnswers.map((answer) => {
+              const isSelected = answers[q.id] === answer;
+              const isCorrect = submitted && answer === q.correct_answer;
+              const isWrong = submitted && isSelected && answer !== q.correct_answer;
+              return (
+                <Pressable
+                  key={answer}
+                  onPress={() => !submitted && setAnswers((prev) => ({ ...prev, [q.id]: answer }))}
+                  disabled={submitted}
+                  style={[
+                    interactiveStyles.answerOption,
+                    {
+                      borderColor: isCorrect ? colors.success : isWrong ? colors.error : isSelected ? colors.primary : colors.border,
+                      backgroundColor: isCorrect ? colors.successLight : isWrong ? (colors.errorLight ?? '#FFF0F0') : isSelected ? colors.primaryLight : colors.inputBackground,
+                    },
+                  ]}
+                >
+                  <View style={[interactiveStyles.radioOuter, {
+                    borderColor: isCorrect ? colors.success : isWrong ? colors.error : isSelected ? colors.primary : colors.border,
+                  }]}>
+                    {isSelected && (
+                      <View style={[interactiveStyles.radioInner, {
+                        backgroundColor: isCorrect ? colors.success : isWrong ? colors.error : colors.primary,
+                      }]} />
+                    )}
+                  </View>
+                  <AppText variant="body" style={{ flex: 1, marginLeft: Spacing.sm }}>{answer}</AppText>
+                  {submitted && isCorrect && <Ionicons name="checkmark-circle" size={18} color={colors.success} />}
+                  {submitted && isWrong && <Ionicons name="close-circle" size={18} color={colors.error} />}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ))}
+
+      {submitted ? (
+        <View style={[interactiveStyles.resultBanner, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}>
+          <Ionicons name="trophy-outline" size={28} color={colors.primary} />
+          <AppText variant="h3" style={{ color: colors.primary, marginTop: Spacing.sm }}>
+            {score} / {parsed.length}
+          </AppText>
+          <AppText variant="caption" muted center>bonnes réponses</AppText>
+        </View>
+      ) : (
+        <AppButton
+          label="Soumettre mes réponses"
+          variant="primary"
+          onPress={handleSubmit}
+          loading={submitting}
+          disabled={!allAnswered || submitting}
+          fullWidth
+        />
+      )}
+    </View>
+  );
+}
+
+// ─── Poll detail ──────────────────────────────────────────────────────────────
+
+interface PollDetailProps {
+  options: ApiPollOption[];
+  poll: ApiPoll;
+}
+
+function PollDetail({ options, poll }: PollDetailProps) {
+  const { colors } = useTheme();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [voted, setVoted] = useState(false);
+  const [voting, setVoting] = useState(false);
+
+  const handleVote = async () => {
+    if (!selectedId) return;
+    setVoting(true);
+    try {
+      await pollService.voteForOption(selectedId);
+      setVoted(true);
+    } catch {
+      Toast.error('Erreur lors du vote.');
+    } finally {
+      setVoting(false);
+    }
+  };
+
+  if (options.length === 0) {
+    return (
+      <View style={[interactiveStyles.empty, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+        <Ionicons name="bar-chart-outline" size={32} color={colors.textLight} />
+        <AppText variant="body" muted center style={{ marginTop: Spacing.sm }}>
+          Aucune option disponible.
+        </AppText>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <View style={{ gap: Spacing.sm, marginBottom: Spacing.md }}>
+        {options.map((option) => {
+          const isSelected = selectedId === option.id;
+          return (
+            <Pressable
+              key={option.id}
+              onPress={() => !voted && setSelectedId(option.id)}
+              disabled={voted}
+              style={[
+                interactiveStyles.answerOption,
+                {
+                  borderColor: isSelected ? colors.primary : colors.border,
+                  backgroundColor: isSelected ? colors.primaryLight : colors.inputBackground,
+                },
+              ]}
+            >
+              <View style={[interactiveStyles.radioOuter, { borderColor: isSelected ? colors.primary : colors.border }]}>
+                {isSelected && <View style={[interactiveStyles.radioInner, { backgroundColor: colors.primary }]} />}
+              </View>
+              <AppText variant="body" style={{ flex: 1, marginLeft: Spacing.sm }}>{option.option}</AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {voted ? (
+        <View style={[interactiveStyles.resultBanner, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
+          <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+          <AppText variant="body" style={{ color: colors.success, marginLeft: Spacing.sm }}>
+            Vote enregistré — {poll.vote_count + 1} vote(s) au total
+          </AppText>
+        </View>
+      ) : (
+        <AppButton
+          label="Voter"
+          variant="primary"
+          onPress={handleVote}
+          loading={voting}
+          disabled={!selectedId || voting}
+          fullWidth
+        />
+      )}
+    </View>
+  );
+}
+
+const interactiveStyles = StyleSheet.create({
+  questionCard: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  answerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1.5,
+    padding: Spacing.sm + 2,
+  },
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  resultBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+    gap: Spacing.xs,
+    flexWrap: 'wrap',
+  },
+  empty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.lg,
+  },
+});
+
+// ─── Confirm modal ────────────────────────────────────────────────────────────
+
+interface ConfirmModalProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading?: boolean;
+}
+
+function ConfirmModal({ visible, title, message, confirmLabel = 'Confirmer', onConfirm, onCancel, loading }: ConfirmModalProps) {
+  const { colors } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={modalStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onCancel} />
+        <View style={[modalStyles.box, { backgroundColor: colors.surface }]}>
+          <AppText variant="h3" style={{ marginBottom: Spacing.sm }}>{title}</AppText>
+          <AppText variant="body" muted style={{ marginBottom: Spacing.lg }}>{message}</AppText>
+          <View style={{ gap: Spacing.sm }}>
+            <AppButton label={confirmLabel} variant="danger" onPress={onConfirm} loading={loading} />
+            <AppButton label="Annuler" variant="secondary" onPress={onCancel} disabled={loading} />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.lg,
+  },
+  box: {
+    width: '100%',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.lg,
+  },
+});
 
 // ─── Watchlist toggle row ─────────────────────────────────────────────────────
 
@@ -194,7 +507,7 @@ function WatchlistSection({ ressourceId, userId }: WatchlistSectionProps) {
   useEffect(() => {
     if (progression) {
       setLocalState({ isAside: progression.is_aside, isExploited: progression.is_exploited, exists: true });
-    } else if (progressionError instanceof ApiError && progressionError.status === 404) {
+    } else if (progressionError) {
       setLocalState({ isAside: false, isExploited: false, exists: false });
     }
   }, [progression, progressionError]);
@@ -270,28 +583,141 @@ function WatchlistSection({ ressourceId, userId }: WatchlistSectionProps) {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ResourceDetailScreen() {
-  const { id, resourceType, resourceData } = useLocalSearchParams<{
+  const { id, resourceType, resourceData, isOwner: isOwnerParam } = useLocalSearchParams<{
     id: string;
     resourceType: string;
     resourceData?: string;
+    isOwner?: string;
   }>();
   const { colors } = useTheme();
   const { isAuthenticated, userId } = useAuth();
 
+  const isOwner = isOwnerParam === 'true';
   const isEvent = isEventLabel(resourceType ?? '');
   const isArticle = isArticleLabel(resourceType ?? '');
+  const isQuiz = isQuizLabel(resourceType ?? '');
+  const isPoll = isPollLabel(resourceType ?? '');
 
-  const { data: eventData, isLoading: loadingEvent, error: errorEvent } = useQuery(
+  const { data: eventData, isLoading: loadingEvent, error: errorEvent, refetch: refetchEvent } = useQuery(
     ['resource-detail-event', id],
     () => eventService.getEventByResourceId(id!),
     { enabled: !!id && isEvent },
   );
 
-  const { data: articleData, isLoading: loadingArticle, error: errorArticle } = useQuery(
+  const { data: articleData, isLoading: loadingArticle, error: errorArticle, refetch: refetchArticle } = useQuery(
     ['resource-detail-article', id],
     () => articleService.getArticleByResourceId(id!),
     { enabled: !!id && isArticle },
   );
+
+  const { data: quizData, isLoading: loadingQuiz, error: errorQuiz } = useQuery(
+    ['resource-detail-quiz', id],
+    () => quizService.getQuizByResourceId(id!),
+    { enabled: !!id && isQuiz },
+  );
+
+  const { data: pollData, isLoading: loadingPoll, error: errorPoll } = useQuery(
+    ['resource-detail-poll', id],
+    () => pollService.getPollByResourceId(id!),
+    { enabled: !!id && isPoll },
+  );
+
+  // ─── Edit state ────────────────────────────────────────────────────────────
+  const [editMode, setEditMode] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editIsVirtual, setEditIsVirtual] = useState(false);
+  const [editDateStart, setEditDateStart] = useState('');
+  const [editDateEnd, setEditDateEnd] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editEventLink, setEditEventLink] = useState('');
+
+  // ─── Delete state ──────────────────────────────────────────────────────────
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const enterEditMode = () => {
+    if (!resource) return;
+    setEditTitle(resource.title);
+    setEditDescription(resource.description);
+    if (isArticle && articleData) {
+      setEditContent(articleData.content);
+    }
+    if (isEvent && eventData) {
+      setEditIsVirtual(eventData.is_virtual);
+      setEditDateStart(eventData.date_start);
+      setEditDateEnd(eventData.date_end);
+      setEditLocation(eventData.location);
+      setEditEventLink(eventData.event_link ?? '');
+    }
+    setEditMode(true);
+  };
+
+  const handleEditSubmit = async () => {
+    if (!resource) return;
+    setEditLoading(true);
+    try {
+      const ressourceBase = {
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        tags: resource.tags.map((t) => t.id),
+        statusId: resource.status?.id ?? '',
+        confidentialityTypeId: resource.confidentiality_type?.id ?? '',
+        typeId: resource.type?.id ?? '',
+      };
+
+      if (isEvent && eventData) {
+        await eventService.updateEvent(eventData.id, {
+          id: eventData.id,
+          isVirtual: editIsVirtual,
+          dateStart: editDateStart,
+          dateEnd: editDateEnd,
+          eventLink: editEventLink,
+          location: editLocation,
+          ressourceId: resource.id,
+          ressource: ressourceBase,
+        });
+        await refetchEvent();
+      } else if (isArticle && articleData) {
+        await articleService.updateArticle(articleData.id, {
+          content: editContent.trim(),
+          ressource: ressourceBase,
+        });
+        await refetchArticle();
+      }
+
+      Toast.success('Ressource mise à jour.');
+      setEditMode(false);
+    } catch {
+      Toast.error('Impossible de mettre à jour la ressource.');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      if (isEvent && eventData) {
+        await eventService.deleteEvent(eventData.id);
+      } else if (isArticle && articleData) {
+        await articleService.deleteArticle(articleData.id);
+      } else if (isQuiz && quizData) {
+        await quizService.deleteQuiz(quizData.id);
+      } else if (isPoll && pollData) {
+        await pollService.deletePoll(pollData.id);
+      }
+      Toast.success('Ressource supprimée.');
+      router.back();
+    } catch {
+      Toast.error('Impossible de supprimer la ressource.');
+      setConfirmDeleteVisible(false);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const fallbackResource: ApiResource | null = useMemo(() => {
     if (!resourceData) return null;
@@ -302,16 +728,27 @@ export default function ResourceDetailScreen() {
     }
   }, [resourceData]);
 
-  const isLoading = loadingEvent || loadingArticle;
-  const hasError = (isEvent && errorEvent) || (isArticle && errorArticle);
-  const hasFetcher = isEvent || isArticle;
+  const isLoading = loadingEvent || loadingArticle || loadingQuiz || loadingPoll;
+  const hasError = (isEvent && errorEvent) || (isArticle && errorArticle) || (isQuiz && errorQuiz) || (isPoll && errorPoll);
+  const hasFetcher = isEvent || isArticle || isQuiz || isPoll;
 
   const resource: ApiResource | null =
-    eventData?.ressource ?? articleData?.ressource ?? fallbackResource ?? null;
+    eventData?.ressource ?? articleData?.ressource ?? quizData?.ressource ?? pollData?.ressource ?? fallbackResource ?? null;
 
   const renderSpecificContent = () => {
     if (isEvent && eventData) return <EventDetail event={eventData} />;
     if (isArticle && articleData) return <ArticleDetail article={articleData} />;
+    if (isQuiz && quizData) {
+      if (isAuthenticated && userId) {
+        return <QuizDetail questions={quizData.questions ?? []} userId={userId} />;
+      }
+      return (
+        <AppText variant="body" muted center>Connectez-vous pour participer au quiz.</AppText>
+      );
+    }
+    if (isPoll && pollData) {
+      return <PollDetail options={pollData.options ?? []} poll={pollData} />;
+    }
     return null;
   };
 
@@ -386,10 +823,10 @@ export default function ResourceDetailScreen() {
           <AppText variant="body">{resource.description}</AppText>
         </View>
 
-        {renderSpecificContent() ? (
+        {(isEvent || isArticle || isQuiz || isPoll) ? (
           <View style={[styles.section, { borderTopColor: colors.borderLight }]}>
             <AppText variant="label" style={{ marginBottom: Spacing.md }}>
-              {isArticle ? 'Contenu' : 'Informations spécifiques'}
+              {isArticle ? 'Contenu' : isQuiz ? 'Questions' : isPoll ? 'Options' : 'Informations spécifiques'}
             </AppText>
             {renderSpecificContent()}
           </View>
@@ -414,9 +851,128 @@ export default function ResourceDetailScreen() {
         {isAuthenticated && userId && id ? (
           <WatchlistSection ressourceId={id} userId={userId} />
         ) : null}
+
+        {isOwner && (
+          <View style={[styles.section, { borderTopColor: colors.borderLight }]}>
+            <AppText variant="label" style={{ marginBottom: Spacing.md }}>Gérer ma ressource</AppText>
+            <View style={{ gap: Spacing.sm }}>
+              {(isEvent || isArticle) ? (
+                <AppButton
+                  label="Modifier"
+                  variant="secondary"
+                  onPress={enterEditMode}
+                  leftIcon={<Ionicons name="create-outline" size={18} color={colors.primary} />}
+                />
+              ) : null}
+              <AppButton
+                label="Supprimer"
+                variant="danger"
+                onPress={() => setConfirmDeleteVisible(true)}
+                leftIcon={<Ionicons name="trash-outline" size={18} color="#fff" />}
+              />
+            </View>
+          </View>
+        )}
       </ScrollView>
     );
   };
+
+  if (editMode) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.borderLight }]}>
+          <Pressable onPress={() => setEditMode(false)} style={styles.backBtn} hitSlop={8} disabled={editLoading}>
+            <AppText variant="body" style={{ color: colors.textMuted }}>Annuler</AppText>
+          </Pressable>
+          <AppText variant="h3" numberOfLines={1} style={{ flex: 1, marginLeft: Spacing.sm, marginRight: Spacing.sm }}>
+            Modifier
+          </AppText>
+          <Pressable onPress={handleEditSubmit} style={styles.backBtn} hitSlop={8} disabled={editLoading}>
+            {editLoading
+              ? <ActivityIndicator size="small" color={colors.primary} />
+              : <AppText variant="body" style={{ color: colors.primary, fontWeight: '700' }}>Sauvegarder</AppText>
+            }
+          </Pressable>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <AppTextInput
+            label="Titre"
+            value={editTitle}
+            onChangeText={setEditTitle}
+            required
+          />
+          <AppTextInput
+            label="Description"
+            value={editDescription}
+            onChangeText={setEditDescription}
+            multiline
+            numberOfLines={3}
+            required
+          />
+
+          {isArticle ? (
+            <AppTextInput
+              label="Contenu"
+              value={editContent}
+              onChangeText={setEditContent}
+              multiline
+              numberOfLines={8}
+              required
+            />
+          ) : null}
+
+          {isEvent ? (
+            <>
+              <View style={editStyles.switchRow}>
+                <AppText variant="label">Événement en ligne</AppText>
+                <Switch
+                  value={editIsVirtual}
+                  onValueChange={setEditIsVirtual}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              {editIsVirtual ? (
+                <AppTextInput
+                  label="Lien de l'événement"
+                  value={editEventLink}
+                  onChangeText={setEditEventLink}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              ) : (
+                <AppTextInput
+                  label="Lieu"
+                  value={editLocation}
+                  onChangeText={setEditLocation}
+                />
+              )}
+
+              <AppDatePicker
+                label="Date de début"
+                value={editDateStart}
+                onChange={setEditDateStart}
+                required
+              />
+              <AppDatePicker
+                label="Date de fin"
+                value={editDateEnd}
+                onChange={setEditDateEnd}
+                required
+              />
+            </>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
@@ -430,9 +986,29 @@ export default function ResourceDetailScreen() {
       </View>
 
       {renderContent()}
+
+      <ConfirmModal
+        visible={confirmDeleteVisible}
+        title="Supprimer la ressource"
+        message="Cette action est irréversible. La ressource sera définitivement supprimée."
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteVisible(false)}
+        loading={deleteLoading}
+      />
     </SafeAreaView>
   );
 }
+
+const editStyles = StyleSheet.create({
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+});
 
 const styles = StyleSheet.create({
   header: {

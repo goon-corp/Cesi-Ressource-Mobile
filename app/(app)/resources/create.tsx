@@ -316,6 +316,7 @@ interface TagSelectorProps {
 
 function TagSelector({ allTags, isLoadingTags, selectedIds, onChange, onTagCreated }: TagSelectorProps) {
   const { colors } = useTheme();
+  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
@@ -324,12 +325,10 @@ function TagSelector({ allTags, isLoadingTags, selectedIds, onChange, onTagCreat
     [allTags, search],
   );
 
-  const toggleTag = (id: string) => {
-    if (selectedIds.includes(id)) {
-      onChange(selectedIds.filter((s) => s !== id));
-    } else {
-      onChange([...selectedIds, id]);
-    }
+  const toggle = (id: string) => {
+    onChange(selectedIds.includes(id)
+      ? selectedIds.filter((s) => s !== id)
+      : [...selectedIds, id]);
   };
 
   const handleCreate = async () => {
@@ -350,102 +349,168 @@ function TagSelector({ allTags, isLoadingTags, selectedIds, onChange, onTagCreat
 
   const exactMatch = allTags.some((t) => t.label.toLowerCase() === search.trim().toLowerCase());
   const showCreate = search.trim().length > 0 && !exactMatch;
+  const selectedTags = selectedIds.map((id) => allTags.find((t) => t.id === id)).filter(Boolean) as TagDto[];
 
   return (
     <View style={{ marginBottom: Spacing.md }}>
       <AppText variant="label" style={{ marginBottom: Spacing.xs }}>Tags</AppText>
 
-      {selectedIds.length > 0 && (
-        <View style={tagStyles.selectedRow}>
-          {selectedIds.map((id) => {
-            const tag = allTags.find((t) => t.id === id);
-            return tag ? (
-              <Pressable
-                key={id}
-                style={[tagStyles.selectedTag, { backgroundColor: colors.primary }]}
-                onPress={() => toggleTag(id)}
-              >
-                <AppText variant="caption" style={{ color: colors.textOnPrimary }}>{tag.label}</AppText>
-                <Ionicons name="close" size={12} color={colors.textOnPrimary} style={{ marginLeft: 4 }} />
-              </Pressable>
-            ) : null;
-          })}
-        </View>
-      )}
-
-      <View style={[tagStyles.searchBar, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}>
-        <Ionicons name="search-outline" size={16} color={colors.placeholder} />
-        <TextInput
-          style={[tagStyles.searchInput, { color: colors.text }]}
-          placeholder="Rechercher ou créer un tag..."
-          placeholderTextColor={colors.placeholder}
-          value={search}
-          onChangeText={setSearch}
-        />
-      </View>
-
-      {showCreate && (
-        <Pressable
-          style={[tagStyles.createBtn, { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
-          onPress={handleCreate}
-          disabled={isCreating}
+      <Pressable
+        style={[tagStyles.trigger, { borderColor: colors.inputBorder, backgroundColor: colors.inputBackground }]}
+        onPress={() => setOpen(true)}
+      >
+        <Ionicons name="pricetags-outline" size={16} color={colors.textMuted} />
+        <AppText
+          variant="body"
+          style={{ flex: 1, marginLeft: Spacing.sm, color: selectedIds.length ? colors.text : colors.placeholder }}
+          numberOfLines={1}
         >
-          {isCreating ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <>
-              <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
-              <AppText variant="caption" style={{ color: colors.primary, marginLeft: 4 }}>
-                Créer "{search.trim()}"
-              </AppText>
-            </>
-          )}
-        </Pressable>
-      )}
+          {selectedIds.length > 0
+            ? `${selectedIds.length} tag${selectedIds.length > 1 ? 's' : ''} sélectionné${selectedIds.length > 1 ? 's' : ''}`
+            : 'Sélectionner des tags…'}
+        </AppText>
+        <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+      </Pressable>
 
-      {isLoadingTags ? (
-        <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: Spacing.sm }} />
-      ) : (
-        <View style={tagStyles.tagList}>
-          {filtered.map((tag) => {
-            const isSelected = selectedIds.includes(tag.id);
-            return (
-              <Pressable
-                key={tag.id}
-                style={[
-                  tagStyles.tagItem,
-                  {
-                    backgroundColor: isSelected ? colors.primary : colors.surface,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                  },
-                ]}
-                onPress={() => toggleTag(tag.id)}
-              >
-                <AppText variant="caption" style={{ color: isSelected ? colors.textOnPrimary : colors.text }}>
-                  {tag.label}
-                </AppText>
-              </Pressable>
-            );
-          })}
+      {selectedTags.length > 0 && (
+        <View style={tagStyles.chips}>
+          {selectedTags.map((tag) => (
+            <Pressable
+              key={tag.id}
+              style={[tagStyles.chip, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}
+              onPress={() => toggle(tag.id)}
+            >
+              <AppText variant="caption" style={{ color: colors.primary }}>{tag.label}</AppText>
+              <Ionicons name="close" size={11} color={colors.primary} style={{ marginLeft: 3 }} />
+            </Pressable>
+          ))}
         </View>
       )}
+
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <View style={tagStyles.overlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setOpen(false)} />
+          <View style={[tagStyles.sheet, { backgroundColor: colors.surface }]}>
+            <View style={[tagStyles.sheetHeader, { borderBottomColor: colors.borderLight }]}>
+              <AppText variant="h3">Tags</AppText>
+              <Pressable onPress={() => setOpen(false)} hitSlop={8}>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </Pressable>
+            </View>
+
+            <View style={[tagStyles.searchBar, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}>
+              <Ionicons name="search-outline" size={16} color={colors.placeholder} />
+              <TextInput
+                style={[tagStyles.searchInput, { color: colors.text }]}
+                placeholder="Rechercher ou créer un tag…"
+                placeholderTextColor={colors.placeholder}
+                value={search}
+                onChangeText={setSearch}
+                autoCorrect={false}
+              />
+              {search.length > 0 && (
+                <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                </Pressable>
+              )}
+            </View>
+
+            {isLoadingTags ? (
+              <View style={{ padding: Spacing.xl, alignItems: 'center' }}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : (
+              <FlatList
+                data={filtered}
+                keyExtractor={(t) => t.id}
+                keyboardShouldPersistTaps="handled"
+                ListHeaderComponent={showCreate ? (
+                  <Pressable
+                    style={[tagStyles.createRow, { borderBottomColor: colors.borderLight }]}
+                    onPress={handleCreate}
+                    disabled={isCreating}
+                  >
+                    {isCreating
+                      ? <ActivityIndicator size="small" color={colors.primary} />
+                      : <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                    }
+                    <AppText variant="body" style={{ color: colors.primary, marginLeft: Spacing.sm, flex: 1 }}>
+                      Créer « {search.trim()} »
+                    </AppText>
+                  </Pressable>
+                ) : null}
+                ListEmptyComponent={!showCreate ? (
+                  <View style={{ padding: Spacing.lg, alignItems: 'center' }}>
+                    <AppText variant="body" muted>Aucun tag trouvé</AppText>
+                  </View>
+                ) : null}
+                renderItem={({ item }) => {
+                  const isSelected = selectedIds.includes(item.id);
+                  return (
+                    <Pressable
+                      style={[
+                        tagStyles.tagRow,
+                        { borderBottomColor: colors.borderLight },
+                        isSelected && { backgroundColor: colors.primaryLight },
+                      ]}
+                      onPress={() => toggle(item.id)}
+                    >
+                      <AppText variant="body" style={{ flex: 1, color: isSelected ? colors.primary : colors.text }}>
+                        {item.label}
+                      </AppText>
+                      {isSelected && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+                    </Pressable>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const tagStyles = StyleSheet.create({
-  selectedRow: {
+  trigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
+    minHeight: 44,
+  },
+  chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.xs,
-    marginBottom: Spacing.sm,
+    marginTop: Spacing.sm,
   },
-  selectedTag: {
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    maxHeight: '75%',
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderBottomWidth: 1,
   },
   searchBar: {
     flexDirection: 'row',
@@ -455,33 +520,27 @@ const tagStyles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
     gap: Spacing.xs,
-    marginBottom: Spacing.xs,
+    margin: Spacing.md,
   },
   searchInput: {
     flex: 1,
     fontSize: FontSize.base,
     paddingVertical: Spacing.xs,
   },
-  createBtn: {
+  createRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    marginBottom: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
   },
-  tagList: {
+  tagRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-    marginTop: Spacing.xs,
-  },
-  tagItem: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    minHeight: 52,
   },
 });
 
@@ -1032,7 +1091,7 @@ export default function CreateResourceScreen() {
     ['confidentiality-types'],
     () => resourceService.getConfidentialityTypes(),
   );
-  const { data: statuses } = useQuery(
+  const { data: statuses, isLoading: isLoadingStatuses, refetch: refetchStatuses } = useQuery(
     ['resource-statuses'],
     () => resourceService.getStatuses(),
   );
@@ -1143,7 +1202,8 @@ export default function CreateResourceScreen() {
 
     const statusId = statuses?.[0]?.id ?? '';
     if (!statusId) {
-      Toast.error('Impossible de récupérer le statut de publication.');
+      await refetchStatuses();
+      Toast.error('Impossible de récupérer le statut de publication. Réessayez dans un instant.');
       return;
     }
 
@@ -1475,8 +1535,8 @@ export default function CreateResourceScreen() {
                   label={isLastStep ? 'Créer' : 'Suivant'}
                   variant="primary"
                   onPress={isLastStep ? handleSubmit : goNext}
-                  loading={isLastStep && isSubmitting}
-                  disabled={isSubmitting}
+                  loading={isLastStep && (isSubmitting || isLoadingStatuses)}
+                  disabled={isSubmitting || (isLastStep && isLoadingStatuses)}
                   fullWidth
                 />
               </View>

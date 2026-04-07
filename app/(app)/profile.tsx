@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Toast } from 'toastify-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useUser } from '@/contexts/UserContext';
@@ -178,9 +178,10 @@ interface ResourceListTabProps {
   fetchFn: FetchFn;
   emptyLabel: string;
   actionsMode?: ResourceCardActionsMode;
+  ownerMode?: boolean;
 }
 
-function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default' }: ResourceListTabProps) {
+function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default', ownerMode = false }: ResourceListTabProps) {
   const { colors } = useTheme();
 
   const [items, setItems] = useState<ApiResource[]>([]);
@@ -241,6 +242,7 @@ function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default' 
                   id: item.id,
                   resourceType: item.type?.label ?? '',
                   resourceData: JSON.stringify(item),
+                  ...(ownerMode ? { isOwner: 'true' } : {}),
                 },
               })
             }
@@ -305,11 +307,15 @@ const listTabStyles = StyleSheet.create({
 
 export default function ProfileScreen() {
   const { isLoading, logout } = useAuth();
-  const { user } = useUser();
+  const { user, refetchUser } = useUser();
   const { colors } = useTheme();
   const { openDrawer } = useDrawer();
 
   const [activeTab, setActiveTab] = useState<TabKey>('info');
+
+  useFocusEffect(useCallback(() => {
+    refetchUser();
+  }, [refetchUser]));
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
@@ -438,6 +444,7 @@ export default function ProfileScreen() {
             fetchFn={userService.getAuthoredResources}
             emptyLabel="Vous n'avez encore publié aucune ressource."
             actionsMode="default"
+            ownerMode
           />
         )}
       </View>

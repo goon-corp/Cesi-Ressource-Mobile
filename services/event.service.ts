@@ -2,6 +2,26 @@ import { api } from './api';
 import type { ApiEvent } from '@/types/resource.types';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
+export interface UpdateEventRessource {
+  title: string;
+  description: string;
+  tags: string[];
+  statusId: string;
+  confidentialityTypeId: string;
+  typeId: string;
+}
+
+export interface UpdateEventPayload {
+  id: string;
+  isVirtual: boolean;
+  dateStart: string;
+  dateEnd: string;
+  eventLink?: string;
+  location: string;
+  ressourceId: string;
+  ressource: UpdateEventRessource;
+}
+
 export interface CreateEventPayload {
   title: string;
   description: string;
@@ -46,4 +66,26 @@ export const eventService = {
 
     return api.upload<ApiEvent>('POST', '/events', formData, true);
   },
+
+  updateEvent: (eventId: string, payload: UpdateEventPayload) =>
+    api.put<ApiEvent>(`/events/${eventId}`, {
+      id: payload.id,
+      is_virtual: payload.isVirtual,
+      date_start: payload.dateStart,
+      date_end: payload.dateEnd,
+      event_link: payload.eventLink ?? '',
+      location: payload.location,
+      ressource_id: payload.ressourceId,
+      ressource: {
+        title: payload.ressource.title,
+        description: payload.ressource.description,
+        tags: payload.ressource.tags,
+        status_id: payload.ressource.statusId,
+        confidentiality_type_id: payload.ressource.confidentialityTypeId,
+        type_id: payload.ressource.typeId,
+      },
+    }, true),
+
+  deleteEvent: (eventId: string) =>
+    api.delete<void>(`/events/${eventId}`, true),
 };

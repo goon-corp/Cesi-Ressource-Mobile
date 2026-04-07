@@ -18,6 +18,18 @@ export interface CreatePollOptionPayload {
 }
 
 export const pollService = {
+  getPollByResourceId: (resourceId: string) =>
+    api.get<ApiPoll>(`/polls/${resourceId}`, false),
+
+  getPollOptions: (pollId: string) =>
+    api.get<ApiPollOption[]>('/PollOption', false, { PollId: pollId, size: 100 }),
+
+  voteForOption: (optionId: string) =>
+    api.post<ApiPollOption>(`/PollOption/${optionId}/vote`, {}, true),
+
+  deletePoll: (pollId: string) =>
+    api.delete<void>(`/polls/${pollId}`, true),
+
   createPoll: (payload: CreatePollPayload) => {
     const formData = new FormData();
     formData.append('Ressource.Title', payload.title);
@@ -41,7 +53,7 @@ export const pollService = {
   createPollOption: (payload: CreatePollOptionPayload) => {
     return api.post<ApiPollOption>('/PollOption', {
       option: payload.option,
-      pollId: payload.pollId,
+      poll_id: payload.pollId,
     }, true);
   },
 };

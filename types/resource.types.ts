@@ -48,13 +48,15 @@ export interface ApiArticle {
 export interface ApiQuiz {
   id: string;
   participation_count: number;
-  ressource_id: string;
+  ressource: ApiResource;
+  questions: ApiQuizzQuestion[];
 }
 
 export interface ApiPoll {
   id: string;
   vote_count: number;
-  ressource_id: string;
+  ressource: ApiResource;
+  options: ApiPollOption[];
 }
 
 export interface ApiQuizzQuestion {
