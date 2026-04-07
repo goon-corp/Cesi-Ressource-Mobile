@@ -92,6 +92,7 @@ function extractErrorMessage(payload: unknown, extractResult: boolean, status: n
     if (result?.errors?.length) return result.errors.join(', ');
     if (result?.error) return result.error;
   }
+  if (typeof payload === 'string' && payload.length > 0) return payload;
   const p = payload as { message?: string; error?: string };
   return p?.message ?? p?.error ?? `Erreur ${status}`;
 }
@@ -122,10 +123,10 @@ async function refreshAccessToken(): Promise<string> {
         headers['x-api-key'] = API_KEY;
       }
 
-      const response = await fetch(`${API_URL}/auth/refresh`, {
+      const response = await fetch(`${API_URL}/auth/refresh-token`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ refresh_token:refreshToken }),
       });
 
       if (!response.ok) {
@@ -136,12 +137,12 @@ async function refreshAccessToken(): Promise<string> {
       }
 
       const data = await response.json();
-      setAccessToken(data.accessToken);
+      setAccessToken(data.access_token);
       if (data.refreshToken) {
-        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken).catch(() => null);
+        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, data.refresh_token).catch(() => null);
       }
 
-      return data.accessToken;
+      return data.access_token;
     } finally {
       isRefreshing = false;
       refreshPromise = null;
@@ -208,6 +209,7 @@ async function request<T>(
       return extractResult ? extractApiResult<T>(retryJson) : (retryJson as T);
     } catch (error) {
       if (error instanceof ApiError) throw error;
+      console.log(error);
       throw new ApiError(401, 'Session expirée');
     }
   }
