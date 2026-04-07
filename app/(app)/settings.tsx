@@ -9,6 +9,7 @@ import { useDrawer } from '@/contexts/DrawerContext';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { HeaderAuthAction } from '@/components/layout/HeaderAuthAction';
 import { AppText } from '@/components/ui/AppText';
+import { SettingRow } from '@/components/ui/SettingRow';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import type { ThemeMode } from '@/types/theme.types';
 
@@ -24,53 +25,6 @@ const THEME_OPTIONS: ThemeOption[] = [
   { mode: 'system', label: 'Système', icon: 'phone-portrait-outline' },
 ];
 
-// ─── Setting Row ──────────────────────────────────────────────────────────────
-interface SettingRowProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  onPress?: () => void;
-  withDivider?: boolean;
-  disabled?: boolean;
-}
-
-function SettingRow({ icon, label, onPress, withDivider, disabled = false }: SettingRowProps) {
-  const { colors } = useTheme();
-
-  return (
-    <>
-      <Pressable
-        style={({ pressed }) => [
-          styles.settingRow,
-          { opacity: disabled ? 0.38 : pressed ? 0.7 : 1 },
-          !disabled && pressed && { backgroundColor: colors.backgroundAlt },
-        ]}
-        onPress={disabled ? undefined : onPress}
-        disabled={disabled}
-        accessibilityState={{ disabled }}
-      >
-        <Ionicons name={icon} size={20} color={disabled ? colors.textLight : colors.textMuted} />
-        <AppText
-          variant="body"
-          style={{
-            flex: 1,
-            marginLeft: Spacing.md,
-            color: disabled ? colors.textLight : colors.text,
-          }}
-        >
-          {label}
-        </AppText>
-        {disabled ? (
-          <Ionicons name="lock-closed-outline" size={15} color={colors.textLight} />
-        ) : (
-          <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
-        )}
-      </Pressable>
-      {withDivider && <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />}
-    </>
-  );
-}
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
   const { colors, themeMode, setThemeMode } = useTheme();
   const { isAuthenticated } = useAuth();
@@ -85,13 +39,8 @@ export default function SettingsScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Appearance */}
-        <AppText variant="label" muted style={styles.sectionTitle}>
-          APPARENCE
-        </AppText>
-        <View
-          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}
-        >
+        <AppText variant="label" muted style={styles.sectionTitle}>APPARENCE</AppText>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <AppText variant="label" style={{ color: colors.text, marginBottom: Spacing.md }}>
             Thème de l'application
           </AppText>
@@ -113,11 +62,7 @@ export default function SettingsScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ checked: isActive }}
                 >
-                  <Ionicons
-                    name={icon}
-                    size={22}
-                    color={isActive ? colors.primary : colors.textMuted}
-                  />
+                  <Ionicons name={icon} size={22} color={isActive ? colors.primary : colors.textMuted} />
                   <AppText
                     variant="caption"
                     style={{
@@ -134,10 +79,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Account */}
-        <AppText variant="label" muted style={[styles.sectionTitle, { marginTop: Spacing.lg }]}>
-          COMPTE
-        </AppText>
+        <AppText variant="label" muted style={[styles.sectionTitle, { marginTop: Spacing.lg }]}>COMPTE</AppText>
 
         {!isAuthenticated && (
           <Pressable
@@ -148,15 +90,11 @@ export default function SettingsScreen() {
             <AppText variant="bodySmall" style={{ flex: 1, color: colors.info, marginLeft: Spacing.sm }}>
               Connectez-vous pour accéder aux paramètres de compte.
             </AppText>
-            <AppText variant="label" style={{ color: colors.info }}>
-              Connexion →
-            </AppText>
+            <AppText variant="label" style={{ color: colors.info }}>Connexion →</AppText>
           </Pressable>
         )}
 
-        <View
-          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}
-        >
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <SettingRow
             icon="person-outline"
             label="Modifier mon profil"
@@ -177,13 +115,8 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* About */}
-        <AppText variant="label" muted style={[styles.sectionTitle, { marginTop: Spacing.lg }]}>
-          À PROPOS
-        </AppText>
-        <View
-          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}
-        >
+        <AppText variant="label" muted style={[styles.sectionTitle, { marginTop: Spacing.lg }]}>À PROPOS</AppText>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
           <SettingRow
             icon="information-circle-outline"
             label="Mentions légales"
@@ -232,16 +165,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.sm,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: BorderRadius.sm,
-  },
-  divider: {
-    height: 1,
-    marginLeft: Spacing.lg + 20,
   },
   authBanner: {
     flexDirection: 'row',
