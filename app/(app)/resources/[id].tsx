@@ -33,6 +33,7 @@ import { quizService } from "@/services/quiz.service";
 import { pollService } from "@/services/poll.service";
 import { progressionService } from "@/services/progression.service";
 import { commentService } from "@/services/comment.service";
+import { reportService } from "@/services/report.service";
 import { ApiError } from "@/services/api";
 import type {
   ApiEvent,
@@ -43,6 +44,7 @@ import type {
   ApiQuizzQuestion,
   ApiPollOption,
   CommentDto,
+  ReportTypeDto,
 } from "@/types/resource.types";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1130,6 +1132,72 @@ function CommentsSection({
   );
 }
 
+// ─── Report modal ─────────────────────────────────────────────────────────────
+
+interface ReportModalProps {
+  visible: boolean;
+  reportTypes: ReportTypeDto[];
+  loadingTypes: boolean;
+  submitting: boolean;
+  onSelect: (reportTypeId: string) => void;
+  onClose: () => void;
+}
+
+function ReportModal({
+  visible,
+  reportTypes,
+  loadingTypes,
+  submitting,
+  onSelect,
+  onClose,
+}: ReportModalProps) {
+  const { colors } = useTheme();
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={modalStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
+        <View style={[modalStyles.box, { backgroundColor: colors.surface }]}>
+          <AppText variant="h3" style={{ marginBottom: Spacing.sm }}>
+            Signaler la ressource
+          </AppText>
+          <AppText variant="body" muted style={{ marginBottom: Spacing.md }}>
+            Choisissez un motif de signalement.
+          </AppText>
+          {loadingTypes ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <View style={{ gap: Spacing.sm }}>
+              {reportTypes.map((type) => (
+                <AppButton
+                  key={type.id}
+                  label={type.label}
+                  variant="secondary"
+                  onPress={() => onSelect(type.id)}
+                  loading={submitting}
+                  disabled={submitting}
+                />
+              ))}
+            </View>
+          )}
+          <View style={{ marginTop: Spacing.md }}>
+            <AppButton
+              label="Annuler"
+              variant="danger"
+              onPress={onClose}
+              disabled={submitting}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ResourceDetailScreen() {
@@ -1210,6 +1278,40 @@ export default function ResourceDetailScreen() {
   // ─── Delete state ──────────────────────────────────────────────────────────
   const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // ─── Report state ──────────────────────────────────────────────────────────
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportTypes, setReportTypes] = useState<ReportTypeDto[]>([]);
+  const [reportLoadingTypes, setReportLoadingTypes] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+
+  const openReportModal = async () => {
+    setReportModalVisible(true);
+    setReportLoadingTypes(true);
+    try {
+      const types = await reportService.getReportTypes();
+      setReportTypes(types);
+    } catch {
+      Toast.error("Impossible de charger les motifs de signalement");
+      setReportModalVisible(false);
+    } finally {
+      setReportLoadingTypes(false);
+    }
+  };
+
+  const handleReport = async (reportTypeId: string) => {
+    if (!id) return;
+    setReportSubmitting(true);
+    try {
+      await reportService.createReport(id, reportTypeId);
+      Toast.success("Signalement envoyé");
+      setReportModalVisible(false);
+    } catch {
+      Toast.error("Impossible de signaler la ressource");
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
 
   const enterEditMode = () => {
     if (!resource) return;
@@ -1501,6 +1603,19 @@ export default function ResourceDetailScreen() {
           </View>
         ) : null}
 
+        {isAuthenticated && !isOwner && id ? (
+          <View style={[styles.section, { borderTopColor: colors.borderLight }]}>
+            <AppButton
+              label="Signaler cette ressource"
+              variant="secondary"
+              onPress={openReportModal}
+              leftIcon={
+                <Ionicons name="flag-outline" size={18} color={colors.error} />
+              }
+            />
+          </View>
+        ) : null}
+
         {isAuthenticated && userId && id ? (
           <WatchlistSection ressourceId={id} userId={userId} />
         ) : null}
@@ -1720,6 +1835,15 @@ export default function ResourceDetailScreen() {
         onConfirm={handleDelete}
         onCancel={() => setConfirmDeleteVisible(false)}
         loading={deleteLoading}
+      />
+
+      <ReportModal
+        visible={reportModalVisible}
+        reportTypes={reportTypes}
+        loadingTypes={reportLoadingTypes}
+        submitting={reportSubmitting}
+        onSelect={handleReport}
+        onClose={() => setReportModalVisible(false)}
       />
     </SafeAreaView>
   );

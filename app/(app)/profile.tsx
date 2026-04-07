@@ -27,7 +27,7 @@ import { BorderRadius, Shadow, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
 import { userService } from '@/services/user.service';
 import { tagService } from '@/services/tag.service';
-import type { ApiResource, TagDto } from '@/types/resource.types';
+import type { ApiResource, TagDto, PaginatedListDto } from '@/types/resource.types';
 
 // ─── Tab definition ───────────────────────────────────────────────────────────
 
@@ -382,7 +382,7 @@ const tagFilterStyles = StyleSheet.create({
 const ALL_SIZE = 50;
 const ITEMS_PER_PAGE = 10;
 
-type FetchFn = (userId: string, page: number, size: number) => Promise<ApiResource[]>;
+type FetchFn = (userId: string, page: number, size: number) => Promise<PaginatedListDto<ApiResource>>;
 
 interface ResourceListTabProps {
   userId: string;
@@ -407,7 +407,7 @@ function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default',
     setIsLoading(true);
     try {
       const data = await fetchFn(userId, 1, ALL_SIZE);
-      setAllItems(Array.isArray(data) ? data : []);
+      setAllItems(data.items ?? []);
     } catch {
       setAllItems([]);
     } finally {
@@ -419,7 +419,7 @@ function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default',
     setIsLoadingTags(true);
     try {
       const data = await tagService.getTags({ size: 100 });
-      setTags(Array.isArray(data) ? data : []);
+      setTags(data?.items ?? []);
     } catch {
       setTags([]);
     } finally {

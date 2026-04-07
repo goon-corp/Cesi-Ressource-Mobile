@@ -64,6 +64,7 @@ export function ResourceCard({ resource, index, onPress, actionsMode = 'default'
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 25 }).start();
 
   const handleLike = async () => {
+    console.log("liking")
     if (likePending) return;
     const next = !liked;
     setLiked(next);

@@ -1101,7 +1101,7 @@ export default function CreateResourceScreen() {
   );
 
   const allTags: TagDto[] = useMemo(() => {
-    const base = Array.isArray(tagsData) ? tagsData : [];
+    const base = tagsData?.items ?? [];
     const localIds = new Set(localTags.map((t) => t.id));
     return [...base.filter((t) => !localIds.has(t.id)), ...localTags];
   }, [tagsData, localTags]);
@@ -1182,16 +1182,16 @@ export default function CreateResourceScreen() {
 
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  const { mutate: createEvent, isLoading: isSubmittingEvent } = useMutation(
+  const { mutate: createEvent, isLoading: isSubmittingEvent, error: errorEvent } = useMutation(
     (payload: CreateEventPayload) => eventService.createEvent(payload),
   );
-  const { mutate: createArticle, isLoading: isSubmittingArticle } = useMutation(
+  const { mutate: createArticle, isLoading: isSubmittingArticle, error: errorArticle } = useMutation(
     (payload: CreateArticlePayload) => articleService.createArticle(payload),
   );
-  const { mutate: createQuiz, isLoading: isSubmittingQuiz } = useMutation(
+  const { mutate: createQuiz, isLoading: isSubmittingQuiz, error: errorQuiz } = useMutation(
     (payload: CreateQuizPayload) => quizService.createQuiz(payload),
   );
-  const { mutate: createPoll, isLoading: isSubmittingPoll } = useMutation(
+  const { mutate: createPoll, isLoading: isSubmittingPoll, error: errorPoll } = useMutation(
     (payload: CreatePollPayload) => pollService.createPoll(payload),
   );
 
@@ -1216,6 +1216,11 @@ export default function CreateResourceScreen() {
       tags: form.tags,
       thumbnail: form.thumbnail ?? undefined,
     };
+
+    if (!isEventType && !isArticleType && !isQuizType && !isPollType) {
+      Toast.error(`Type de ressource non reconnu (typeId: ${form.typeId}, label: "${typeLabel}").`);
+      return;
+    }
 
     let result: unknown = null;
 
@@ -1269,7 +1274,11 @@ export default function CreateResourceScreen() {
       Toast.success('Ressource créée avec succès !');
       router.back();
     } else {
-      Toast.error('Une erreur est survenue lors de la création.');
+      const mutationError = isEventType ? errorEvent
+        : isArticleType ? errorArticle
+        : isQuizType ? errorQuiz
+        : errorPoll;
+      Toast.error(mutationError?.message ?? 'Une erreur est survenue lors de la création.');
     }
   };
 

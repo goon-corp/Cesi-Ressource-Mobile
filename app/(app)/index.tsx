@@ -129,7 +129,7 @@ export default function HomeScreen() {
     () => tagService.getTags({ size: 100 }),
   );
 
-  const allTags = useMemo(() => (Array.isArray(tagsData) ? tagsData : []), [tagsData]);
+  const allTags = useMemo(() => tagsData?.items ?? [], [tagsData]);
 
   const fetchResources = useCallback(async (pageNum: number) => {
     setIsLoading(true);
@@ -141,9 +141,9 @@ export default function HomeScreen() {
         ...(activeFilter ? { RessourceType: activeFilter } : {}),
         ...(selectedTagIds.length > 0 ? { RessourceTags: selectedTagIds } : {}),
       });
-      const items = Array.isArray(result) ? result : [];
+      const items = result?.items ?? [];
       setResources(items);
-      setHasNextPage(items.length >= PAGE_SIZE);
+      setHasNextPage(result?.has_next_page ?? false);
       setPage(pageNum);
       listRef.current?.scrollToOffset({ offset: 0, animated: false });
     } catch {

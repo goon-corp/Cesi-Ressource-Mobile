@@ -4,6 +4,7 @@ import type {
   ResourceTypeInfo,
   ResourceStatusInfo,
   ResourceConfidentialityTypeInfo,
+  PaginatedListDto,
 } from '@/types/resource.types';
 
 export interface ResourceQueryParams {
@@ -16,7 +17,7 @@ export interface ResourceQueryParams {
 
 export const resourceService = {
   getResources: (params?: ResourceQueryParams) =>
-    api.get<ApiResource[]>('/ressources', false, params),
+    api.get<PaginatedListDto<ApiResource>>('/ressources', false, params),
 
   getResourceTypes: () =>
     api.get<ResourceTypeInfo[]>('/ressource-types', false),
