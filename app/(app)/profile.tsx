@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   FlatList,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,9 +26,8 @@ import { ResourceCard, type ResourceCardActionsMode } from '@/components/ui/Reso
 import { BorderRadius, Shadow, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
 import { userService } from '@/services/user.service';
-import type { ApiResource } from '@/types/resource.types';
-
-const PAGE_SIZE = 10;
+import { tagService } from '@/services/tag.service';
+import type { ApiResource, TagDto } from '@/types/resource.types';
 
 // ─── Tab definition ───────────────────────────────────────────────────────────
 
@@ -169,7 +170,217 @@ const statStyles = StyleSheet.create({
   },
 });
 
+// ─── Tag filter ───────────────────────────────────────────────────────────────
+
+interface TagFilterProps {
+  allTags: TagDto[];
+  isLoadingTags: boolean;
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+}
+
+function TagFilter({ allTags, isLoadingTags, selectedIds, onChange }: TagFilterProps) {
+  const { colors } = useTheme();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(
+    () => allTags.filter((t) => t.label.toLowerCase().includes(search.toLowerCase())),
+    [allTags, search],
+  );
+
+  const toggle = (id: string) => {
+    onChange(selectedIds.includes(id)
+      ? selectedIds.filter((s) => s !== id)
+      : [...selectedIds, id]);
+  };
+
+  const selectedTags = selectedIds.map((id) => allTags.find((t) => t.id === id)).filter(Boolean) as TagDto[];
+  const hasFilter = selectedIds.length > 0;
+
+  return (
+    <View>
+      <Pressable
+        onPress={() => setOpen(true)}
+        style={[
+          tagFilterStyles.trigger,
+          {
+            borderColor: hasFilter ? colors.primary : colors.inputBorder,
+            backgroundColor: hasFilter ? colors.primaryLight : colors.inputBackground,
+          },
+        ]}
+      >
+        <Ionicons name="pricetags-outline" size={16} color={hasFilter ? colors.primary : colors.textMuted} />
+        <AppText
+          variant="label"
+          style={{ color: hasFilter ? colors.primary : colors.textMuted, marginLeft: Spacing.xs }}
+          numberOfLines={1}
+        >
+          {hasFilter ? `${selectedIds.length} tag${selectedIds.length > 1 ? 's' : ''}` : 'Tags'}
+        </AppText>
+        {hasFilter
+          ? (
+            <Pressable onPress={() => onChange([])} hitSlop={8} style={{ marginLeft: Spacing.xs }}>
+              <Ionicons name="close-circle" size={14} color={colors.primary} />
+            </Pressable>
+          )
+          : <Ionicons name="chevron-down" size={14} color={colors.textMuted} style={{ marginLeft: Spacing.xs }} />
+        }
+      </Pressable>
+
+      {selectedTags.length > 0 && (
+        <View style={tagFilterStyles.chips}>
+          {selectedTags.map((tag) => (
+            <Pressable
+              key={tag.id}
+              style={[tagFilterStyles.chip, { backgroundColor: colors.primaryLight, borderColor: colors.primary }]}
+              onPress={() => toggle(tag.id)}
+            >
+              <AppText variant="caption" style={{ color: colors.primary }}>{tag.label}</AppText>
+              <Ionicons name="close" size={11} color={colors.primary} style={{ marginLeft: 3 }} />
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <View style={tagFilterStyles.overlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setOpen(false)} />
+          <View style={[tagFilterStyles.sheet, { backgroundColor: colors.surface }]}>
+            <View style={[tagFilterStyles.sheetHeader, { borderBottomColor: colors.borderLight }]}>
+              <AppText variant="h3">Filtrer par tag</AppText>
+              <Pressable onPress={() => setOpen(false)} hitSlop={8}>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </Pressable>
+            </View>
+
+            <View style={[tagFilterStyles.searchBar, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}>
+              <Ionicons name="search-outline" size={16} color={colors.placeholder} />
+              <TextInput
+                style={[tagFilterStyles.searchInput, { color: colors.text }]}
+                placeholder="Rechercher un tag…"
+                placeholderTextColor={colors.placeholder}
+                value={search}
+                onChangeText={setSearch}
+                autoCorrect={false}
+              />
+              {search.length > 0 && (
+                <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                </Pressable>
+              )}
+            </View>
+
+            {isLoadingTags ? (
+              <View style={{ padding: Spacing.xl, alignItems: 'center' }}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : (
+              <FlatList
+                data={filtered}
+                keyExtractor={(t) => t.id}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={
+                  <View style={{ padding: Spacing.lg, alignItems: 'center' }}>
+                    <AppText variant="body" muted>Aucun tag trouvé</AppText>
+                  </View>
+                }
+                renderItem={({ item }) => {
+                  const isSelected = selectedIds.includes(item.id);
+                  return (
+                    <Pressable
+                      style={[
+                        tagFilterStyles.tagRow,
+                        { borderBottomColor: colors.borderLight },
+                        isSelected && { backgroundColor: colors.primaryLight },
+                      ]}
+                      onPress={() => toggle(item.id)}
+                    >
+                      <AppText variant="body" style={{ flex: 1, color: isSelected ? colors.primary : colors.text }}>
+                        {item.label}
+                      </AppText>
+                      {isSelected && <Ionicons name="checkmark" size={20} color={colors.primary} />}
+                    </Pressable>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const tagFilterStyles = StyleSheet.create({
+  trigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    maxHeight: '75%',
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    gap: Spacing.xs,
+    margin: Spacing.md,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: FontSize.base,
+    paddingVertical: Spacing.xs,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    minHeight: 52,
+  },
+});
+
 // ─── Resource list tab ────────────────────────────────────────────────────────
+
+const ALL_SIZE = 50;
+const ITEMS_PER_PAGE = 10;
 
 type FetchFn = (userId: string, page: number, size: number) => Promise<ApiResource[]>;
 
@@ -184,27 +395,72 @@ interface ResourceListTabProps {
 function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default', ownerMode = false }: ResourceListTabProps) {
   const { colors } = useTheme();
 
-  const [items, setItems] = useState<ApiResource[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasNext, setHasNext] = useState(false);
+  const [allItems, setAllItems] = useState<ApiResource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [tags, setTags] = useState<TagDto[]>([]);
+  const [isLoadingTags, setIsLoadingTags] = useState(true);
 
-  const load = useCallback(async (p: number) => {
+  const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await fetchFn(userId, p, PAGE_SIZE);
-      const list = Array.isArray(data) ? data : [];
-      setItems(list);
-      setHasNext(list.length >= PAGE_SIZE);
-      setPage(p);
+      const data = await fetchFn(userId, 1, ALL_SIZE);
+      setAllItems(Array.isArray(data) ? data : []);
     } catch {
-      setItems([]);
+      setAllItems([]);
     } finally {
       setIsLoading(false);
     }
   }, [userId, fetchFn]);
 
-  useEffect(() => { load(1); }, [load]);
+  const loadTags = useCallback(async () => {
+    setIsLoadingTags(true);
+    try {
+      const data = await tagService.getTags({ size: 100 });
+      setTags(Array.isArray(data) ? data : []);
+    } catch {
+      setTags([]);
+    } finally {
+      setIsLoadingTags(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    loadTags();
+  }, [load, loadTags]);
+
+  const filteredItems = useMemo(() => {
+    let result = allItems;
+    if (search.trim().length > 0) {
+      const q = search.trim().toLowerCase();
+      result = result.filter((r) => r.title.toLowerCase().includes(q));
+    }
+    if (selectedTagIds.length > 0) {
+      result = result.filter((r) =>
+        selectedTagIds.every((tagId) => r.tags.some((t) => t.id === tagId)),
+      );
+    }
+    return result;
+  }, [allItems, search, selectedTagIds]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const displayedItems = filteredItems.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
+
+  const handleSearchChange = (text: string) => {
+    setSearch(text);
+    setPage(1);
+  };
+
+  const handleTagsChange = (ids: string[]) => {
+    setSelectedTagIds(ids);
+    setPage(1);
+  };
+
+  const hasActiveFilter = search.trim().length > 0 || selectedTagIds.length > 0;
 
   if (isLoading) {
     return (
@@ -214,63 +470,89 @@ function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default',
     );
   }
 
-  if (items.length === 0) {
-    return (
-      <View style={listTabStyles.centered}>
-        <Ionicons name="file-tray-outline" size={48} color={colors.textLight} />
-        <AppText variant="body" muted center style={{ marginTop: Spacing.md }}>
-          {emptyLabel}
-        </AppText>
-      </View>
-    );
-  }
-
   return (
     <View style={{ flex: 1 }}>
-      <FlatList
-        data={items}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <ResourceCard
-            resource={item}
-            index={index}
-            actionsMode={actionsMode}
-            onPress={() =>
-              router.push({
-                pathname: '/(app)/resources/[id]',
-                params: {
-                  id: item.id,
-                  resourceType: item.type?.label ?? '',
-                  resourceData: JSON.stringify(item),
-                  ...(ownerMode ? { isOwner: 'true' } : {}),
-                },
-              })
-            }
+      <View style={[listTabStyles.filterBar, { backgroundColor: colors.surface, borderBottomColor: colors.borderLight }]}>
+        <View style={[listTabStyles.searchBar, { backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]}>
+          <Ionicons name="search-outline" size={16} color={colors.placeholder} />
+          <TextInput
+            style={[listTabStyles.searchInput, { color: colors.text }]}
+            placeholder="Rechercher…"
+            placeholderTextColor={colors.placeholder}
+            value={search}
+            onChangeText={handleSearchChange}
+            autoCorrect={false}
+            returnKeyType="search"
           />
-        )}
-        ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
-        contentContainerStyle={listTabStyles.list}
-        showsVerticalScrollIndicator={false}
-      />
-      <View style={[listTabStyles.pagination, { borderTopColor: colors.borderLight, backgroundColor: colors.background }]}>
-        <Pressable
-          onPress={() => load(page - 1)}
-          disabled={page <= 1}
-          style={[listTabStyles.pageBtn, page <= 1 && { opacity: 0.35 }]}
-        >
-          <Ionicons name="chevron-back" size={18} color={colors.primary} />
-          <AppText variant="label" style={{ color: colors.primary }}>Précédent</AppText>
-        </Pressable>
-        <AppText variant="label" muted>Page {page}</AppText>
-        <Pressable
-          onPress={() => load(page + 1)}
-          disabled={!hasNext}
-          style={[listTabStyles.pageBtn, !hasNext && { opacity: 0.35 }]}
-        >
-          <AppText variant="label" style={{ color: colors.primary }}>Suivant</AppText>
-          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-        </Pressable>
+          {search.length > 0 && (
+            <Pressable onPress={() => handleSearchChange('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
+        <TagFilter
+          allTags={tags}
+          isLoadingTags={isLoadingTags}
+          selectedIds={selectedTagIds}
+          onChange={handleTagsChange}
+        />
       </View>
+
+      {filteredItems.length === 0 ? (
+        <View style={listTabStyles.centered}>
+          <Ionicons name="file-tray-outline" size={48} color={colors.textLight} />
+          <AppText variant="body" muted center style={{ marginTop: Spacing.md }}>
+            {hasActiveFilter ? 'Aucune ressource ne correspond à votre recherche.' : emptyLabel}
+          </AppText>
+        </View>
+      ) : (
+        <>
+          <FlatList
+            data={displayedItems}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => (
+              <ResourceCard
+                resource={item}
+                index={index}
+                actionsMode={actionsMode}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(app)/resources/[id]',
+                    params: {
+                      id: item.id,
+                      resourceType: item.type?.label ?? '',
+                      resourceData: JSON.stringify(item),
+                      ...(ownerMode ? { isOwner: 'true' } : {}),
+                    },
+                  })
+                }
+              />
+            )}
+            ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+            contentContainerStyle={listTabStyles.list}
+            showsVerticalScrollIndicator={false}
+          />
+          <View style={[listTabStyles.pagination, { borderTopColor: colors.borderLight, backgroundColor: colors.background }]}>
+            <Pressable
+              onPress={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              style={[listTabStyles.pageBtn, safePage <= 1 && { opacity: 0.35 }]}
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.primary} />
+              <AppText variant="label" style={{ color: colors.primary }}>Précédent</AppText>
+            </Pressable>
+            <AppText variant="label" muted>Page {safePage} / {totalPages}</AppText>
+            <Pressable
+              onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              style={[listTabStyles.pageBtn, safePage >= totalPages && { opacity: 0.35 }]}
+            >
+              <AppText variant="label" style={{ color: colors.primary }}>Suivant</AppText>
+              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -281,6 +563,28 @@ const listTabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.lg,
+  },
+  filterBar: {
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.sm,
+    borderBottomWidth: 1,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    gap: Spacing.xs,
+    minHeight: 40,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: FontSize.base,
+    paddingVertical: Spacing.xs,
   },
   list: {
     padding: Spacing.md,

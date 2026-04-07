@@ -81,3 +81,22 @@ export interface ApiRessourceProgression {
   is_aside: boolean;
   is_exploited: boolean;
 }
+
+export interface CommentDto {
+  id: string;
+  content: string;
+  creation_time: string;
+  update_time?: string;
+  ressource_id: string;
+  user_id: string;
+  comment_id?: string;
+  user_name?: string;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  size: number;
+  total_pages: number;
+}
