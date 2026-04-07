@@ -19,6 +19,7 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { HeaderAuthAction } from '@/components/layout/HeaderAuthAction';
 import { AppText } from '@/components/ui/AppText';
 import { ResourceCard } from '@/components/ui/ResourceCard';
+import { TagFilter } from '@/components/ui/TagFilter';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
 import { resourceService } from '@/services/resource.service';
@@ -194,11 +195,7 @@ export default function HomeScreen() {
     [resourceTypes],
   );
 
-  const toggleTag = useCallback((id: string) => {
-    setSelectedTagIds((prev) =>
-      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
-    );
-  }, []);
+
 
   const searchBorderColor = searchFocused ? colors.inputBorderFocus : colors.border;
 
@@ -270,23 +267,14 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
-        {allTags.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filtersRow}
-            keyboardShouldPersistTaps="handled"
-          >
-            {allTags.map((tag) => (
-              <CategoryChip
-                key={tag.id}
-                label={tag.label}
-                isActive={selectedTagIds.includes(tag.id)}
-                onPress={() => toggleTag(tag.id)}
-              />
-            ))}
-          </ScrollView>
-        )}
+        <View style={styles.tagFilterWrapper}>
+          <TagFilter
+            allTags={allTags}
+            isLoadingTags={false}
+            selectedIds={selectedTagIds}
+            onChange={setSelectedTagIds}
+          />
+        </View>
 
         <View style={[styles.toolbar, { borderBottomColor: colors.borderLight }]}>
           <AppText variant="caption" muted>
@@ -294,13 +282,6 @@ export default function HomeScreen() {
               ? 'Chargement...'
               : `${resources.length} ressource${resources.length !== 1 ? 's' : ''}`}
           </AppText>
-          {selectedTagIds.length > 0 && (
-            <Pressable onPress={() => setSelectedTagIds([])} hitSlop={8}>
-              <AppText variant="caption" style={{ color: colors.primary }}>
-                Effacer les tags
-              </AppText>
-            </Pressable>
-          )}
         </View>
       </View>
 
@@ -377,6 +358,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs + 2,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
+  },
+  tagFilterWrapper: {
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.sm,
   },
   toolbar: {
     flexDirection: 'row',
