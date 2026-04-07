@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   FlatList,
   Pressable,
   ScrollView,
@@ -20,6 +19,8 @@ import { HeaderAuthAction } from '@/components/layout/HeaderAuthAction';
 import { AppText } from '@/components/ui/AppText';
 import { ResourceCard } from '@/components/ui/ResourceCard';
 import { TagFilter } from '@/components/ui/TagFilter';
+import { CategoryChip } from '@/components/ui/CategoryChip';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { FontSize } from '@/constants/Typography';
 import { resourceService } from '@/services/resource.service';
@@ -29,68 +30,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { ApiResource } from '@/types/resource.types';
 
 const PAGE_SIZE = 10;
-
-// ─── Category Chip ────────────────────────────────────────────────────────────
-
-interface ChipProps {
-  label: string;
-  isActive: boolean;
-  onPress: () => void;
-}
-
-function CategoryChip({ label, isActive, onPress }: ChipProps) {
-  const { colors } = useTheme();
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePress = () => {
-    Animated.sequence([
-      Animated.timing(scale, { toValue: 0.88, duration: 80, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true }),
-    ]).start();
-    onPress();
-  };
-
-  return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable
-        style={[
-          styles.chip,
-          {
-            backgroundColor: isActive ? colors.primary : colors.surface,
-            borderColor: isActive ? colors.primary : colors.border,
-          },
-        ]}
-        onPress={handlePress}
-      >
-        <AppText
-          variant="label"
-          style={{ color: isActive ? colors.textOnPrimary : colors.textMuted }}
-        >
-          {label}
-        </AppText>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-// ─── Empty State ──────────────────────────────────────────────────────────────
-
-function EmptyState() {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.empty}>
-      <Ionicons name="search-outline" size={52} color={colors.textLight} />
-      <AppText variant="h3" muted center style={{ marginTop: Spacing.md }}>
-        Aucun résultat
-      </AppText>
-      <AppText variant="body" muted center style={{ marginTop: Spacing.xs }}>
-        Modifiez votre recherche ou changez de catégorie.
-      </AppText>
-    </View>
-  );
-}
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ResourcesScreen() {
   const { colors } = useTheme();
@@ -142,8 +81,7 @@ export default function ResourcesScreen() {
         ...(activeFilter ? { RessourceType: activeFilter } : {}),
         ...(selectedTagIds.length > 0 ? { RessourceTags: selectedTagIds } : {}),
       });
-      const items = result?.items ?? [];
-      setResources(items);
+      setResources(result?.items ?? []);
       setHasNextPage(result?.has_next_page ?? false);
       setPage(pageNum);
       listRef.current?.scrollToOffset({ offset: 0, animated: false });
@@ -218,12 +156,7 @@ export default function ResourcesScreen() {
       />
 
       <View style={[styles.controls, { backgroundColor: colors.background }]}>
-        <View
-          style={[
-            styles.searchBar,
-            { backgroundColor: colors.surface, borderColor: searchBorderColor },
-          ]}
-        >
+        <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: searchBorderColor }]}>
           <Ionicons name="search-outline" size={18} color={colors.placeholder} />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
@@ -293,7 +226,12 @@ export default function ResourcesScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
-            ListEmptyComponent={<EmptyState />}
+            ListEmptyComponent={
+              <EmptyState
+                title="Aucun résultat"
+                subtitle="Modifiez votre recherche ou changez de catégorie."
+              />
+            }
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
@@ -349,12 +287,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
     paddingRight: Spacing.md,
   },
-  chip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs + 2,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
   tagFilterWrapper: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.xs,
@@ -372,10 +304,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.xl,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: Spacing['3xl'],
   },
   loadingCenter: {
     flex: 1,
