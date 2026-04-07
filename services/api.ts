@@ -138,7 +138,7 @@ async function refreshAccessToken(): Promise<string> {
 
       const data = await response.json();
       setAccessToken(data.access_token);
-      if (data.refreshToken) {
+      if (data.refresh_token) {
         await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, data.refresh_token).catch(() => null);
       }
 
