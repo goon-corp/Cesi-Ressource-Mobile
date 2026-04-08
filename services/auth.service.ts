@@ -24,6 +24,9 @@ export const authService = {
     await api.post<void>('/auth/register', payload, false, true);
   },
 
+  confirmAccount: (token: string) =>
+    api.put<void>(`/auth/confirm-account/${token}`, {}, false),
+
   forgotPassword: (payload: ForgotPasswordPayload) =>
     api.post<void>('/auth/forgot-password', payload, false),
 

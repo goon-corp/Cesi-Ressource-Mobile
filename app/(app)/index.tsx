@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -7,7 +7,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useTheme } from '@/hooks/useTheme';
 import { useDrawer } from '@/contexts/DrawerContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,6 +18,7 @@ import { HeaderAuthAction } from '@/components/layout/HeaderAuthAction';
 import { AppText } from '@/components/ui/AppText';
 import { BorderRadius, Shadow, Spacing } from '@/constants/Spacing';
 import { FontWeight } from '@/constants/Typography';
+import { CONFIRM_ACCOUNT_DEADLINE_KEY } from '@/app/(auth)/confirm-account';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -101,6 +103,24 @@ export default function HomeScreen() {
   const { openDrawer } = useDrawer();
   const { isAuthenticated } = useAuth();
   const { user } = useUser();
+  const [showConfirmBanner, setShowConfirmBanner] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    if (isAuthenticated) {
+      setShowConfirmBanner(false);
+      return;
+    }
+    SecureStore.getItemAsync(CONFIRM_ACCOUNT_DEADLINE_KEY).then((value) => {
+      if (!value) { setShowConfirmBanner(false); return; }
+      const deadline = Number(value);
+      if (Date.now() < deadline) {
+        setShowConfirmBanner(true);
+      } else {
+        setShowConfirmBanner(false);
+        SecureStore.deleteItemAsync(CONFIRM_ACCOUNT_DEADLINE_KEY).catch(() => {});
+      }
+    }).catch(() => setShowConfirmBanner(false));
+  }, [isAuthenticated]));
 
   const greeting = isAuthenticated && user
     ? `Bonjour, ${user.first_name}\u00A0!`
@@ -118,6 +138,19 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
+        {showConfirmBanner && (
+          <Pressable
+            style={[styles.confirmBanner, { backgroundColor: colors.warning }]}
+            onPress={() => router.push('/(auth)/confirm-account')}
+          >
+            <Ionicons name="mail-outline" size={18} color="#FFFFFF" />
+            <AppText style={styles.confirmBannerText}>
+              Il ne vous reste plus qu'une étape avant de vous connecter ! Cliquez ici
+            </AppText>
+            <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
+          </Pressable>
+        )}
+
         {/* Hero */}
         <View style={[styles.hero, { backgroundColor: colors.primary }]}>
           <AppText
@@ -198,6 +231,19 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   scroll: {
     paddingBottom: Spacing.xl,
+  },
+  confirmBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  confirmBannerText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: FontWeight.semibold,
   },
   hero: {
     paddingHorizontal: Spacing.lg,

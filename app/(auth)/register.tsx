@@ -11,8 +11,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '@/hooks/useAuth';
 import { Toast } from 'toastify-react-native';
+import { CONFIRM_ACCOUNT_DEADLINE_KEY } from '@/app/(auth)/confirm-account';
 import { useTheme } from '@/hooks/useTheme';
 import { AppText } from '@/components/ui/AppText';
 import { AppTextInput } from '@/components/ui/AppTextInput';
@@ -131,8 +133,10 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await register(form);
+      const deadline = Date.now() + 15 * 60 * 1000;
+      await SecureStore.setItemAsync(CONFIRM_ACCOUNT_DEADLINE_KEY, String(deadline));
       Toast.success('Un email de confirmation vous a été envoyé.');
-      router.replace('/(auth)/login');
+      router.replace('/(auth)/confirm-account');
     } catch (err) {
       if (err instanceof ApiError) {
         setApiError(err.status === 409 ? 'Cette adresse email est déjà utilisée' : err.message);
