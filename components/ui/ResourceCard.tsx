@@ -33,9 +33,10 @@ interface ResourceCardProps {
   index: number;
   onPress?: () => void;
   actionsMode?: ResourceCardActionsMode;
+  onRemove?: (id: string) => void;
 }
 
-export function ResourceCard({ resource, index, onPress, actionsMode = 'default' }: ResourceCardProps) {
+export function ResourceCard({ resource, index, onPress, actionsMode = 'default', onRemove }: ResourceCardProps) {
   const { colors } = useTheme();
   const { isAuthenticated } = useAuth();
 
@@ -64,13 +65,13 @@ export function ResourceCard({ resource, index, onPress, actionsMode = 'default'
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 25 }).start();
 
   const handleLike = async () => {
-    console.log("liking")
     if (likePending) return;
     const next = !liked;
     setLiked(next);
     setLikePending(true);
     try {
       await resourceService.likeResource(resource.id);
+      if (!next) onRemove?.(resource.id);
     } catch {
       setLiked(!next);
       Toast.error('Impossible de mettre à jour le like.');
@@ -86,6 +87,7 @@ export function ResourceCard({ resource, index, onPress, actionsMode = 'default'
     setFavPending(true);
     try {
       await resourceService.favoriteResource(resource.id);
+      if (!next) onRemove?.(resource.id);
     } catch {
       setFavorited(!next);
       Toast.error('Impossible de mettre à jour le favori.');

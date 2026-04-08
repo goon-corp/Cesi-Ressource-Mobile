@@ -34,6 +34,7 @@ import { pollService } from "@/services/poll.service";
 import { progressionService } from "@/services/progression.service";
 import { commentService } from "@/services/comment.service";
 import { reportService } from "@/services/report.service";
+import { resourceService } from "@/services/resource.service";
 import { ApiError } from "@/services/api";
 import type {
   ApiEvent,
@@ -1275,6 +1276,50 @@ export default function ResourceDetailScreen() {
   const [editLocation, setEditLocation] = useState("");
   const [editEventLink, setEditEventLink] = useState("");
 
+  // ─── Like / Favorite state ─────────────────────────────────────────────────
+  const [isLiked, setIsLiked] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+
+  const handleLike = async () => {
+    if (!isAuthenticated) {
+      router.push('/(auth)/login');
+      return;
+    }
+    if (!id || likeLoading) return;
+    setLikeLoading(true);
+    const previous = isLiked;
+    setIsLiked((v) => !v);
+    try {
+      await resourceService.likeResource(id);
+    } catch {
+      setIsLiked(previous);
+      Toast.error('Impossible de mettre à jour le like.');
+    } finally {
+      setLikeLoading(false);
+    }
+  };
+
+  const handleFavorite = async () => {
+    if (!isAuthenticated) {
+      router.push('/(auth)/login');
+      return;
+    }
+    if (!id || favoriteLoading) return;
+    setFavoriteLoading(true);
+    const previous = isFavorited;
+    setIsFavorited((v) => !v);
+    try {
+      await resourceService.favoriteResource(id);
+    } catch {
+      setIsFavorited(previous);
+      Toast.error('Impossible de mettre à jour les favoris.');
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
+
   // ─── Delete state ──────────────────────────────────────────────────────────
   const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -1823,6 +1868,20 @@ export default function ResourceDetailScreen() {
         >
           {resource?.title ?? "Détails"}
         </AppText>
+        <Pressable onPress={handleFavorite} style={styles.backBtn} hitSlop={8} disabled={favoriteLoading}>
+          <Ionicons
+            name={isFavorited ? "bookmark" : "bookmark-outline"}
+            size={24}
+            color={isFavorited ? colors.primary : colors.textMuted}
+          />
+        </Pressable>
+        <Pressable onPress={handleLike} style={styles.backBtn} hitSlop={8} disabled={likeLoading}>
+          <Ionicons
+            name={isLiked ? "heart" : "heart-outline"}
+            size={24}
+            color={isLiked ? colors.error : colors.textMuted}
+          />
+        </Pressable>
       </View>
 
       {renderContent()}

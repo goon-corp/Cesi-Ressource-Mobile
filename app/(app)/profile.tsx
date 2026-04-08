@@ -28,10 +28,19 @@ export default function ProfileScreen() {
   const { openDrawer } = useDrawer();
 
   const [activeTab, setActiveTab] = useState<TabKey>('info');
+  const [likesCount, setLikesCount] = useState(0);
+  const [favoritesCount, setFavoritesCount] = useState(0);
 
   useFocusEffect(useCallback(() => {
     refetchUser();
   }, [refetchUser]));
+
+  useEffect(() => {
+    if (user) {
+      setLikesCount(user.liked_ressources_count);
+      setFavoritesCount(user.favorite_ressources_count);
+    }
+  }, [user]);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
@@ -91,8 +100,8 @@ export default function ProfileScreen() {
         ]}
       >
         <StatCard value={user.authored_ressources_count} label="Ressources" />
-        <StatCard value={user.liked_ressources_count} label="Likes" />
-        <StatCard value={user.favorite_ressources_count} label="Favoris" />
+        <StatCard value={likesCount} label="Likes" />
+        <StatCard value={favoritesCount} label="Favoris" />
       </Animated.View>
 
       <View style={[styles.tabBarWrapper, { borderBottomColor: colors.borderLight, backgroundColor: colors.surface }]}>
@@ -136,6 +145,7 @@ export default function ProfileScreen() {
             fetchFn={userService.getLikedResources}
             emptyLabel="Vous n'avez encore liké aucune ressource."
             actionsMode="liked"
+            onRemove={() => setLikesCount((c) => Math.max(0, c - 1))}
           />
         )}
 
@@ -145,6 +155,7 @@ export default function ProfileScreen() {
             fetchFn={userService.getFavResources}
             emptyLabel="Vous n'avez encore mis aucune ressource en favori."
             actionsMode="favorited"
+            onRemove={() => setFavoritesCount((c) => Math.max(0, c - 1))}
           />
         )}
 

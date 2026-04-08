@@ -29,9 +29,10 @@ interface ResourceListTabProps {
   emptyLabel: string;
   actionsMode?: ResourceCardActionsMode;
   ownerMode?: boolean;
+  onRemove?: (id: string) => void;
 }
 
-export function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default', ownerMode = false }: ResourceListTabProps) {
+export function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'default', ownerMode = false, onRemove }: ResourceListTabProps) {
   const { colors } = useTheme();
 
   const [allItems, setAllItems] = useState<ApiResource[]>([]);
@@ -41,6 +42,11 @@ export function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'de
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [tags, setTags] = useState<TagDto[]>([]);
   const [isLoadingTags, setIsLoadingTags] = useState(true);
+
+  const handleRemove = useCallback((id: string) => {
+    setAllItems((prev) => prev.filter((item) => item.id !== id));
+    onRemove?.(id);
+  }, [onRemove]);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -154,6 +160,7 @@ export function ResourceListTab({ userId, fetchFn, emptyLabel, actionsMode = 'de
                 resource={item}
                 index={index}
                 actionsMode={actionsMode}
+                onRemove={handleRemove}
                 onPress={() =>
                   router.push({
                     pathname: '/(app)/resources/[id]',
