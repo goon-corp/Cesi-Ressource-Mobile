@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable } from 'react-native';
+import { router } from 'expo-router';
 import { Toast } from 'toastify-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { AppText } from '@/components/ui/AppText';
@@ -165,11 +165,15 @@ export function CommentsSection({ ressourceId, userId, isAuthenticated }: Commen
                 style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}
               >
                 <View style={styles.cardHeader}>
-                  <View style={[styles.avatar, { backgroundColor: colors.primaryLight }]}>
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/(app)/users/[id]', params: { id: comment.user_id } })}
+                    style={({ pressed }) => [styles.avatar, { backgroundColor: colors.primaryLight, opacity: pressed ? 0.6 : 1 }]}
+                    hitSlop={4}
+                  >
                     <AppText variant="caption" style={{ color: colors.primary, fontWeight: '700' }}>
                       {(comment.user_name ?? 'U')[0].toUpperCase()}
                     </AppText>
-                  </View>
+                  </Pressable>
                   <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                     <AppText variant="label">{comment.user_name ?? 'Utilisateur'}</AppText>
                     <AppText variant="caption" muted>{formatDate(comment.creation_time)}</AppText>

@@ -14,3 +14,11 @@ export type UpdateUserPayload = {
   last_name?: string;
   user_name?: string;
 };
+
+export type FriendRequestDto = {
+  user_sender_id: string;
+  user_receiver_id: string;
+  request_status: string;
+  creation_time: string;
+  update_time?: string;
+};
