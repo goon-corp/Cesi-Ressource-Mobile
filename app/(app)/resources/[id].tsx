@@ -1030,11 +1030,13 @@ function CommentsSection({
                 ]}
               >
                 <View style={commentStyles.cardHeader}>
-                  <View
-                    style={[
+                  <Pressable
+                    onPress={() => router.push({ pathname: "/(app)/users/[id]", params: { id: comment.user_id } })}
+                    style={({ pressed }) => [
                       commentStyles.avatar,
-                      { backgroundColor: colors.primaryLight },
+                      { backgroundColor: colors.primaryLight, opacity: pressed ? 0.6 : 1 },
                     ]}
+                    hitSlop={4}
                   >
                     <AppText
                       variant="caption"
@@ -1042,7 +1044,7 @@ function CommentsSection({
                     >
                       {(comment.user_name ?? "U")[0].toUpperCase()}
                     </AppText>
-                  </View>
+                  </Pressable>
                   <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                     <AppText variant="label">
                       {comment.user_name ?? "Utilisateur"}
