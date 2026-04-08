@@ -9,7 +9,7 @@ export const userService = {
     api.get<UserProfileDto>(`/user/${userId}/profile`),
 
   updateUserProfile: (userId: string, payload: UpdateUserPayload) =>
-    api.patch<UserProfileDto>(`/user/profile/${userId}`, payload),
+    api.put<UserProfileDto>(`/user/${userId}`, payload),
 
   getLikedResources: (userId: string, page = 1, size = PAGE_SIZE) =>
     api.get<PaginatedListDto<ApiResource>>(`/user/${userId}/liked-ressources`, true, { page, size }),

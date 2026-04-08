@@ -11,18 +11,21 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '@/hooks/useAuth';
 import { Toast } from 'toastify-react-native';
+import { CONFIRM_ACCOUNT_DEADLINE_KEY } from '@/app/(auth)/confirm-account';
 import { useTheme } from '@/hooks/useTheme';
 import { AppText } from '@/components/ui/AppText';
 import { AppTextInput } from '@/components/ui/AppTextInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppAlert } from '@/components/ui/AppAlert';
+import { PasswordRules, ConfirmPasswordMatch, isPasswordValid } from '@/components/auth/PasswordRules';
+import { StepIndicator } from '@/components/auth/StepIndicator';
 import { BorderRadius, Spacing } from '@/constants/Spacing';
 import { FontSize, FontWeight } from '@/constants/Typography';
 import { ApiError } from '@/services/api';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface FieldErrors {
   email?: string;
   password?: string;
@@ -30,80 +33,6 @@ interface FieldErrors {
   user_name?: string;
   first_name?: string;
   last_name?: string;
-}
-
-// ─── Password rules ───────────────────────────────────────────────────────────
-const PASSWORD_RULES = [
-  { label: 'Entre 5 et 20 caractères', test: (p: string) => p.length >= 5 && p.length <= 20 },
-  { label: 'Au moins une majuscule', test: (p: string) => /[A-Z]/.test(p) },
-  { label: 'Au moins un chiffre', test: (p: string) => /[0-9]/.test(p) },
-  { label: 'Au moins un symbole', test: (p: string) => /[^a-zA-Z0-9]/.test(p) },
-];
-
-function isPasswordValid(p: string) {
-  return PASSWORD_RULES.every(({ test }) => test(p));
-}
-
-function PasswordRules({ password }: { password: string }) {
-  const { colors } = useTheme();
-  if (!password) return null;
-
-  return (
-    <View style={ruleStyles.container}>
-      {PASSWORD_RULES.map(({ label, test }) => {
-        const ok = test(password);
-        return (
-          <View key={label} style={ruleStyles.row}>
-            <Ionicons
-              name={ok ? 'checkmark-circle' : 'ellipse-outline'}
-              size={14}
-              color={ok ? colors.success : colors.textMuted}
-            />
-            <AppText
-              variant="caption"
-              style={{ marginLeft: 6, color: ok ? colors.success : colors.textMuted }}
-            >
-              {label}
-            </AppText>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-const ruleStyles = StyleSheet.create({
-  container: {
-    marginTop: -Spacing.xs,
-    marginBottom: Spacing.md,
-    gap: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-});
-
-function ConfirmPasswordMatch({ password, confirm }: { password: string; confirm: string }) {
-  const { colors } = useTheme();
-  if (!confirm) return null;
-
-  const match = password === confirm;
-  return (
-    <View style={[ruleStyles.row, { marginTop: -Spacing.xs, marginBottom: Spacing.md }]}>
-      <Ionicons
-        name={match ? 'checkmark-circle' : 'close-circle'}
-        size={14}
-        color={match ? colors.success : colors.error}
-      />
-      <AppText
-        variant="caption"
-        style={{ marginLeft: 6, color: match ? colors.success : colors.error }}
-      >
-        {match ? 'Les mots de passe correspondent' : 'Les mots de passe ne correspondent pas'}
-      </AppText>
-    </View>
-  );
 }
 
 function validateStep1(
@@ -128,111 +57,12 @@ function validateStep2(
 ): Pick<FieldErrors, 'user_name' | 'first_name' | 'last_name'> {
   const e: FieldErrors = {};
   if (!user_name) e.user_name = "Le nom d'utilisateur est requis";
-  else if (user_name.length < 3) e.user_name = "Minimum 3 caractères";
+  else if (user_name.length < 3) e.user_name = 'Minimum 3 caractères';
   if (!first_name) e.first_name = 'Le prénom est requis';
   if (!last_name) e.last_name = 'Le nom est requis';
   return e;
 }
 
-// ─── Step Indicator ───────────────────────────────────────────────────────────
-interface StepIndicatorProps {
-  current: number;
-  total: number;
-}
-
-function StepIndicator({ current, total }: StepIndicatorProps) {
-  const { colors } = useTheme();
-  const STEP_LABELS = ['Compte', 'Profil'];
-
-  return (
-    <View style={stepStyles.wrapper}>
-      {Array.from({ length: total }).map((_, i) => {
-        const stepNum = i + 1;
-        const isDone = stepNum < current;
-        const isActive = stepNum === current;
-
-        return (
-          <React.Fragment key={stepNum}>
-            <View style={stepStyles.stepItem}>
-              <View
-                style={[
-                  stepStyles.dot,
-                  {
-                    backgroundColor: isDone || isActive ? colors.primary : colors.backgroundAlt,
-                    borderColor: isDone || isActive ? colors.primary : colors.border,
-                  },
-                ]}
-              >
-                {isDone ? (
-                  <Ionicons name="checkmark" size={13} color={colors.textOnPrimary} />
-                ) : (
-                  <AppText
-                    style={{
-                      color: isActive ? colors.textOnPrimary : colors.textMuted,
-                      fontSize: FontSize.xs,
-                      fontWeight: '700',
-                    }}
-                  >
-                    {stepNum}
-                  </AppText>
-                )}
-              </View>
-              <AppText
-                variant="caption"
-                style={{
-                  color: isActive ? colors.primary : isDone ? colors.success : colors.textMuted,
-                  fontWeight: isActive ? '600' : '400',
-                  marginTop: 4,
-                }}
-              >
-                {STEP_LABELS[i]}
-              </AppText>
-            </View>
-
-            {i < total - 1 && (
-              <View
-                style={[
-                  stepStyles.line,
-                  { backgroundColor: isDone ? colors.primary : colors.border },
-                ]}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
-    </View>
-  );
-}
-
-const stepStyles = StyleSheet.create({
-  wrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    marginBottom: Spacing.xl,
-    gap: 0,
-  },
-  stepItem: {
-    alignItems: 'center',
-    width: 64,
-  },
-  dot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  line: {
-    flex: 1,
-    height: 2,
-    marginTop: 15, // center with dot
-    marginHorizontal: -4,
-  },
-});
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
 export default function RegisterScreen() {
   const { register } = useAuth();
   const { colors } = useTheme();
@@ -255,7 +85,6 @@ export default function RegisterScreen() {
     isPasswordValid(form.password) &&
     form.confirm_password === form.password;
 
-  // Animation
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -304,8 +133,10 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await register(form);
+      const deadline = Date.now() + 15 * 60 * 1000;
+      await SecureStore.setItemAsync(CONFIRM_ACCOUNT_DEADLINE_KEY, String(deadline));
       Toast.success('Un email de confirmation vous a été envoyé.');
-      router.replace('/(auth)/login');
+      router.replace('/(auth)/confirm-account');
     } catch (err) {
       if (err instanceof ApiError) {
         setApiError(err.status === 409 ? 'Cette adresse email est déjà utilisée' : err.message);
@@ -319,10 +150,7 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
@@ -335,7 +163,6 @@ export default function RegisterScreen() {
             </AppText>
           </Pressable>
 
-          {/* Logo */}
           <View style={styles.header}>
             <View style={[styles.logoMark, { backgroundColor: colors.primary }]}>
               <AppText
@@ -356,10 +183,8 @@ export default function RegisterScreen() {
             </AppText>
           </View>
 
-          {/* Step indicator */}
           <StepIndicator current={currentStep} total={2} />
 
-          {/* Animated form */}
           <Animated.View
             style={[
               styles.card,
@@ -370,7 +195,6 @@ export default function RegisterScreen() {
               },
             ]}
           >
-            {/* Step title */}
             <AppText variant="h3" style={{ marginBottom: Spacing.md, color: colors.text }}>
               {currentStep === 1 ? 'Informations de connexion' : 'Votre profil'}
             </AppText>
@@ -449,11 +273,7 @@ export default function RegisterScreen() {
                     />
                   </View>
                 </View>
-                <AppButton
-                  label="Créer mon compte"
-                  onPress={handleRegister}
-                  loading={loading}
-                />
+                <AppButton label="Créer mon compte" onPress={handleRegister} loading={loading} />
                 <Pressable onPress={goBack} style={styles.backBtn}>
                   <Ionicons name="arrow-back" size={16} color={colors.primary} />
                   <AppText variant="label" style={{ color: colors.primary, marginLeft: Spacing.xs }}>
@@ -464,15 +284,10 @@ export default function RegisterScreen() {
             )}
           </Animated.View>
 
-          {/* Login link */}
           <View style={styles.footer}>
-            <AppText variant="body" muted>
-              Déjà un compte ?{' '}
-            </AppText>
+            <AppText variant="body" muted>Déjà un compte ?{' '}</AppText>
             <Pressable onPress={() => router.back()}>
-              <AppText variant="link" style={{ color: colors.primary }}>
-                Se connecter
-              </AppText>
+              <AppText variant="link" style={{ color: colors.primary }}>Se connecter</AppText>
             </Pressable>
           </View>
         </ScrollView>
