@@ -15,7 +15,7 @@ import {
   Switch,
   View,
 } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams, router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Toast } from "toastify-react-native";
@@ -1281,6 +1281,14 @@ export default function ResourceDetailScreen() {
   const [isFavorited, setIsFavorited] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    if (!isAuthenticated || !id) return;
+    resourceService.getUserStatus(id).then((status) => {
+      setIsLiked(status.is_liked);
+      setIsFavorited(status.is_favorited);
+    }).catch(() => {});
+  }, [id, isAuthenticated]));
 
   const handleLike = async () => {
     if (!isAuthenticated) {

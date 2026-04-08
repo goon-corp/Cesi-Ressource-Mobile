@@ -15,6 +15,11 @@ export interface ResourceQueryParams {
   RessourceTags?: string[];
 }
 
+export interface ResourceUserStatus {
+  is_liked: boolean;
+  is_favorited: boolean;
+}
+
 export const resourceService = {
   getResources: (params?: ResourceQueryParams) =>
     api.get<PaginatedListDto<ApiResource>>('/ressources', false, params),
@@ -27,6 +32,9 @@ export const resourceService = {
 
   getStatuses: () =>
     api.get<ResourceStatusInfo[]>('/ressource-statuses', false),
+
+  getUserStatus: (id: string) =>
+    api.get<ResourceUserStatus>(`/ressources/${id}/user-status`, true),
 
   likeResource: (id: string) =>
     api.post<void>(`/ressources/${id}/like`, {}, true),
